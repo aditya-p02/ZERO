@@ -1,0 +1,578 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ZERO — HUD</title>
+<link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@300;400;500;600;700&family=Share+Tech+Mono&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --blue:       #00d4ff;
+    --blue-dim:   #0099cc;
+    --blue-dark:  #003344;
+    --blue-glow:  rgba(0, 212, 255, 0.15);
+    --blue-glow2: rgba(0, 212, 255, 0.05);
+    --bg:         #010d14;
+    --panel:      rgba(0, 20, 35, 0.85);
+    --text:       #c8f0ff;
+    --text-dim:   #5a8fa0;
+    --danger:     #ff4466;
+    --warn:       #ffaa00;
+    --ok:         #00ffaa;
+  }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Rajdhani', sans-serif;
+    height: 100vh;
+    overflow: hidden;
+    user-select: none;
+  }
+
+  .panel-center {
+    overflow: hidden;  /* contain the scroll inside */
+  }
+
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image:
+      linear-gradient(rgba(0,212,255,0.03) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(0,212,255,0.03) 1px, transparent 1px);
+    background-size: 40px 40px;
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  body::after {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background: radial-gradient(ellipse 60% 50% at 50% 50%, rgba(0,212,255,0.04) 0%, transparent 70%);
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  .hud {
+    position: relative;
+    z-index: 1;
+    height: 100vh;
+    display: grid;
+    grid-template-rows: 64px 1fr 140px 48px;
+    grid-template-columns: 280px 1fr 280px;
+    gap: 12px;
+    padding: 12px;
+  }
+
+  .header {
+    grid-column: 1 / -1;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    border-bottom: 1px solid rgba(0,212,255,0.2);
+    padding-bottom: 10px;
+  }
+
+  .logo {
+    font-size: 28px;
+    font-weight: 700;
+    letter-spacing: 12px;
+    color: var(--blue);
+    text-shadow: 0 0 20px var(--blue), 0 0 40px rgba(0,212,255,0.3);
+  }
+
+  .logo span {
+    font-size: 11px;
+    font-weight: 300;
+    letter-spacing: 4px;
+    color: var(--text-dim);
+    display: block;
+    margin-top: -4px;
+  }
+
+  .status-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 13px;
+    letter-spacing: 2px;
+    padding: 6px 18px;
+    border: 1px solid var(--blue);
+    color: var(--blue);
+    text-shadow: 0 0 10px var(--blue);
+    box-shadow: 0 0 15px var(--blue-glow), inset 0 0 15px var(--blue-glow2);
+  }
+
+  .status-dot {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    background: var(--ok);
+    box-shadow: 0 0 8px var(--ok);
+  }
+
+  .status-dot.listening { background: var(--blue); box-shadow: 0 0 8px var(--blue); animation: pulse 1s ease-in-out infinite; }
+  .status-dot.thinking  { background: var(--warn); box-shadow: 0 0 8px var(--warn); animation: pulse 0.6s ease-in-out infinite; }
+  .status-dot.speaking  { background: var(--ok);   box-shadow: 0 0 8px var(--ok);  animation: pulse 0.4s ease-in-out infinite; }
+  .status-dot.online    { background: var(--ok);   box-shadow: 0 0 8px var(--ok); }
+
+  @keyframes pulse {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50%       { opacity: 0.4; transform: scale(0.8); }
+  }
+
+  .header-time { text-align: right; font-family: 'Share Tech Mono', monospace; }
+  .clock { font-size: 22px; color: var(--blue); letter-spacing: 2px; }
+  .date  { font-size: 11px; color: var(--text-dim); letter-spacing: 1px; margin-top: 2px; }
+
+  .panel {
+    background: var(--panel);
+    border: 1px solid rgba(0,212,255,0.15);
+    padding: 16px;
+    position: relative;
+    backdrop-filter: blur(4px);
+  }
+
+  .panel::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, var(--blue), transparent);
+    opacity: 0.5;
+  }
+
+  .panel-label {
+    font-size: 10px;
+    letter-spacing: 3px;
+    color: var(--text-dim);
+    text-transform: uppercase;
+    margin-bottom: 12px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .panel-label::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: rgba(0,212,255,0.15);
+  }
+
+  .panel-left { grid-row: 2; grid-column: 1; }
+
+  .info-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 8px 0;
+    border-bottom: 1px solid rgba(0,212,255,0.07);
+    font-size: 13px;
+  }
+  .info-row:last-child { border-bottom: none; }
+  .info-key   { color: var(--text-dim); letter-spacing: 1px; font-size: 11px; }
+  .info-value { color: var(--blue); font-family: 'Share Tech Mono', monospace; font-size: 12px; }
+  .info-value.ok   { color: var(--ok); }
+  .info-value.warn { color: var(--warn); }
+
+  .panel-center {
+    grid-row: 2; grid-column: 2;
+    display: flex; flex-direction: column;
+  }
+
+  .convo-area {
+    flex: 1;
+    overflow-y: scroll;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    padding-right: 4px;
+    user-select: text;
+    pointer-events: all;
+    scroll-behavior: smooth;
+    min-height: 0;        /* critical — lets flex child shrink and scroll */
+    overscroll-behavior: contain;
+  }
+
+  .convo-area::-webkit-scrollbar { width: 3px; }
+  .convo-area::-webkit-scrollbar-thumb { background: var(--blue-dim); }
+
+  .msg { display: flex; flex-direction: column; gap: 4px; animation: fadeIn 0.3s ease; }
+  @keyframes fadeIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+
+  .msg-label { font-size: 10px; letter-spacing: 3px; color: var(--text-dim); }
+  .msg-text {
+    font-size: 15px; font-weight: 500; line-height: 1.5;
+    padding: 10px 14px; border-left: 2px solid;
+  }
+
+  .msg.user .msg-label { color: var(--blue-dim); }
+  .msg.user .msg-text  { border-color: var(--blue-dim); background: rgba(0,212,255,0.04); color: var(--text); }
+  .msg.zero .msg-label { color: var(--ok); }
+  .msg.zero .msg-text  { border-color: var(--ok); background: rgba(0,255,170,0.04); color: var(--text); }
+
+  .panel-right { grid-row: 2; grid-column: 3; }
+
+  .mode-display {
+    text-align: center;
+    padding: 14px 0;
+    margin-bottom: 14px;
+    border: 1px solid rgba(0,212,255,0.15);
+  }
+
+  .mode-label-sm { font-size: 10px; letter-spacing: 3px; color: var(--text-dim); }
+  .mode-value {
+    font-size: 20px; font-weight: 700; letter-spacing: 4px; margin-top: 4px;
+    color: var(--ok); text-shadow: 0 0 15px var(--ok);
+  }
+  .mode-value.private-mode { color: var(--danger); text-shadow: 0 0 15px var(--danger); }
+
+  .memory-list { display: flex; flex-direction: column; gap: 6px; max-height: 200px; overflow-y: auto; }
+  .memory-item { font-size: 11px; font-family: 'Share Tech Mono', monospace; color: var(--text-dim); padding: 5px 8px; border-left: 1px solid rgba(0,212,255,0.2); line-height: 1.4; }
+  .memory-item .mem-cat { color: var(--blue-dim); font-size: 10px; }
+
+  .panel-bottom {
+    grid-row: 3; grid-column: 1 / -1;
+    display: flex; flex-direction: column; justify-content: center;
+  }
+
+  .waveform-area { display: flex; align-items: center; gap: 16px; margin-bottom: 10px; }
+
+  .waveform { display: flex; align-items: center; gap: 3px; height: 32px; }
+  .wave-bar { width: 3px; background: var(--blue); border-radius: 2px; opacity: 0.3; height: 6px; transition: height 0.1s; }
+  .waveform.active .wave-bar { animation: wave 0.8s ease-in-out infinite; opacity: 1; }
+  .wave-bar:nth-child(1)  { animation-delay: 0.0s; }
+  .wave-bar:nth-child(2)  { animation-delay: 0.1s; }
+  .wave-bar:nth-child(3)  { animation-delay: 0.2s; }
+  .wave-bar:nth-child(4)  { animation-delay: 0.3s; }
+  .wave-bar:nth-child(5)  { animation-delay: 0.4s; }
+  .wave-bar:nth-child(6)  { animation-delay: 0.3s; }
+  .wave-bar:nth-child(7)  { animation-delay: 0.2s; }
+  .wave-bar:nth-child(8)  { animation-delay: 0.1s; }
+  .wave-bar:nth-child(9)  { animation-delay: 0.0s; }
+  .wave-bar:nth-child(10) { animation-delay: 0.1s; }
+  .wave-bar:nth-child(11) { animation-delay: 0.2s; }
+  .wave-bar:nth-child(12) { animation-delay: 0.3s; }
+  @keyframes wave { 0%, 100% { height: 4px; } 50% { height: 28px; } }
+
+  .input-text { font-size: 16px; font-weight: 500; color: var(--blue); letter-spacing: 0.5px; min-height: 22px; }
+  .input-text.empty { color: var(--text-dim); font-style: italic; font-size: 13px; }
+
+  .footer {
+    grid-row: 4; grid-column: 1 / -1;
+    display: flex; align-items: center; justify-content: space-between;
+    border-top: 1px solid rgba(0,212,255,0.1);
+    padding-top: 8px;
+    font-size: 10px; letter-spacing: 2px; color: var(--text-dim);
+    font-family: 'Share Tech Mono', monospace;
+  }
+
+  /* ── Code blocks inside conversation ──────────────────────────────── */
+  .code-block {
+    margin: 8px 0;
+    border: 1px solid rgba(0,212,255,0.25);
+    background: rgba(0,8,18,0.9);
+  }
+  .code-lang {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 9px;
+    letter-spacing: 2px;
+    color: var(--blue-dim);
+    padding: 3px 10px;
+    border-bottom: 1px solid rgba(0,212,255,0.12);
+    background: rgba(0,212,255,0.06);
+  }
+  .code-block pre {
+    margin: 0;
+    padding: 10px 14px;
+    overflow-x: auto;
+    white-space: pre;
+  }
+  .code-block code {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 12px;
+    line-height: 1.65;
+    color: #7eeeff;
+  }
+  .msg-prose { display: block; }
+  /* ─────────────────────────────────────────────────────────────────── */
+
+  .corner { position: fixed; width: 40px; height: 40px; border-color: rgba(0,212,255,0.3); border-style: solid; pointer-events: none; z-index: 10; }
+  .corner.tl { top: 8px; left: 8px;   border-width: 2px 0 0 2px; }
+  .corner.tr { top: 8px; right: 8px;  border-width: 2px 2px 0 0; }
+  .corner.bl { bottom: 8px; left: 8px;  border-width: 0 0 2px 2px; }
+  .corner.br { bottom: 8px; right: 8px; border-width: 0 2px 2px 0; }
+
+  .scanline {
+    position: fixed; top: 0; left: 0; right: 0; height: 2px;
+    background: linear-gradient(90deg, transparent, rgba(0,212,255,0.4), transparent);
+    animation: scan 6s linear infinite;
+    pointer-events: none; z-index: 5;
+  }
+  @keyframes scan { 0% { top: 0; opacity: 0; } 5% { opacity: 1; } 95% { opacity: 1; } 100% { top: 100vh; opacity: 0; } }
+</style>
+</head>
+<body>
+
+<div class="corner tl"></div>
+<div class="corner tr"></div>
+<div class="corner bl"></div>
+<div class="corner br"></div>
+<div class="scanline"></div>
+
+<div class="hud">
+
+  <header class="header">
+    <div class="logo">ZERO<span>PERSONAL AI SYSTEM</span></div>
+    <div class="header-center">
+      <div class="status-badge">
+        <div class="status-dot online" id="statusDot"></div>
+        <span id="statusText">ONLINE</span>
+      </div>
+    </div>
+    <div class="header-time">
+      <div class="clock" id="clock">--:--:--</div>
+      <div class="date"  id="date">---</div>
+    </div>
+  </header>
+
+  <div class="panel panel-left">
+    <div class="panel-label">System</div>
+    <div class="info-row"><span class="info-key">BRAIN</span><span class="info-value ok" id="brainModel">GROQ / LLAMA-3.3-70B</span></div>
+    <div class="info-row"><span class="info-key">VOICE IN</span><span class="info-value ok">GROQ WHISPER</span></div>
+    <div class="info-row"><span class="info-key">VOICE OUT</span><span class="info-value ok">ELEVENLABS CHRIS</span></div>
+    <div class="info-row"><span class="info-key">MEMORY</span><span class="info-value ok">POSTGRESQL</span></div>
+    <div class="info-row"><span class="info-key">UPTIME</span><span class="info-value" id="uptime">00:00:00</span></div>
+    <div class="info-row"><span class="info-key">CONNECTED</span><span class="info-value ok" id="wsStatus">YES</span></div>
+  </div>
+
+  <div class="panel panel-center">
+    <div class="panel-label">Conversation</div>
+    <div class="convo-area" id="convoArea"></div>
+  </div>
+
+  <div class="panel panel-right">
+    <div class="panel-label">Mode</div>
+    <div class="mode-display">
+      <div class="mode-label-sm">CURRENT MODE</div>
+      <div class="mode-value" id="modeValue">CLOUD</div>
+    </div>
+    <div class="panel-label">Memory</div>
+    <div class="memory-list" id="memoryList">
+      <div class="memory-item"><span class="mem-cat">—</span> No facts stored yet</div>
+    </div>
+  </div>
+
+  <div class="panel panel-bottom">
+    <div class="panel-label">Input</div>
+    <div class="waveform-area">
+      <div class="waveform" id="waveform">
+        <div class="wave-bar"></div><div class="wave-bar"></div>
+        <div class="wave-bar"></div><div class="wave-bar"></div>
+        <div class="wave-bar"></div><div class="wave-bar"></div>
+        <div class="wave-bar"></div><div class="wave-bar"></div>
+        <div class="wave-bar"></div><div class="wave-bar"></div>
+        <div class="wave-bar"></div><div class="wave-bar"></div>
+      </div>
+      <div class="input-text empty" id="inputText">Waiting for input...</div>
+    </div>
+  </div>
+
+  <footer class="footer">
+    <span>ZERO v1.0 // ADITYA PERSONAL AI</span>
+    <span id="footerStatus">ALL SYSTEMS NOMINAL</span>
+    <span id="footerTime">--</span>
+  </footer>
+
+</div>
+
+<script>
+  const WS_URL = 'ws://localhost:8765';
+  let ws = null;
+  let uptimeStart = null;
+  let reconnectTimer = null;
+
+  // Track the highest message ID we've rendered — never go backwards
+  let lastRenderedId = 0;
+
+  // Clock
+  function updateClock() {
+    const now = new Date();
+    document.getElementById('clock').textContent = now.toTimeString().slice(0, 8);
+    document.getElementById('date').textContent = now.toDateString().toUpperCase();
+    document.getElementById('footerTime').textContent = now.toISOString().slice(0, 19).replace('T', ' ') + ' UTC';
+  }
+  setInterval(updateClock, 1000);
+  updateClock();
+
+  // Uptime
+  function updateUptime() {
+    if (!uptimeStart) return;
+    const diff = Math.floor((Date.now() - uptimeStart) / 1000);
+    const h = String(Math.floor(diff / 3600)).padStart(2, '0');
+    const m = String(Math.floor((diff % 3600) / 60)).padStart(2, '0');
+    const s = String(diff % 60).padStart(2, '0');
+    document.getElementById('uptime').textContent = `${h}:${m}:${s}`;
+  }
+  setInterval(updateUptime, 1000);
+
+  // WebSocket
+  function connect() {
+    ws = new WebSocket(WS_URL);
+
+    ws.onopen = () => {
+      document.getElementById('wsStatus').textContent = 'YES';
+      document.getElementById('wsStatus').className = 'info-value ok';
+      if (reconnectTimer) { clearTimeout(reconnectTimer); reconnectTimer = null; }
+    };
+
+    ws.onmessage = (e) => {
+      const state = JSON.parse(e.data);
+      updateHUD(state);
+    };
+
+    ws.onclose = () => {
+      document.getElementById('wsStatus').textContent = 'RECONNECTING';
+      document.getElementById('wsStatus').className = 'info-value warn';
+      reconnectTimer = setTimeout(connect, 2000);
+    };
+
+    ws.onerror = () => ws.close();
+  }
+
+  connect();
+
+  // Main HUD update — called on every WebSocket message
+  function updateHUD(state) {
+    // Uptime
+    if (state.uptime_start && !uptimeStart) {
+      uptimeStart = new Date(state.uptime_start).getTime();
+    }
+
+    // Status badge
+    const statusMap = {
+      listening: ['listening', 'LISTENING'],
+      thinking:  ['thinking',  'THINKING'],
+      speaking:  ['speaking',  'SPEAKING'],
+      online:    ['online',    'ONLINE'],
+    };
+    const [cls, label] = statusMap[state.status] || ['online', 'ONLINE'];
+    document.getElementById('statusDot').className = `status-dot ${cls}`;
+    document.getElementById('statusText').textContent = label;
+
+    // Waveform
+    document.getElementById('waveform').className =
+      state.status === 'listening' ? 'waveform active' : 'waveform';
+
+    // Mode
+    const modeEl = document.getElementById('modeValue');
+    if (state.private) {
+      modeEl.textContent = 'PRIVATE';
+      modeEl.className = 'mode-value private-mode';
+      document.getElementById('brainModel').textContent = 'LOCAL / OLLAMA';
+      document.getElementById('brainModel').className = 'info-value warn';
+    } else {
+      modeEl.textContent = 'CLOUD';
+      modeEl.className = 'mode-value';
+      document.getElementById('brainModel').textContent = 'GROQ / LLAMA-3.3-70B';
+      document.getElementById('brainModel').className = 'info-value ok';
+    }
+
+    // Input display
+    const inputEl = document.getElementById('inputText');
+    if (state.user_input) {
+      inputEl.textContent = state.user_input;
+      inputEl.className = 'input-text';
+    } else {
+      inputEl.textContent = 'Waiting for input...';
+      inputEl.className = 'input-text empty';
+    }
+
+    // Footer
+    const footerMap = {
+      listening: 'AWAITING VOICE INPUT',
+      thinking:  'PROCESSING — NEURAL INFERENCE ACTIVE',
+      speaking:  'AUDIO OUTPUT ACTIVE',
+      online:    'ALL SYSTEMS NOMINAL',
+    };
+    document.getElementById('footerStatus').textContent =
+      footerMap[state.status] || 'ALL SYSTEMS NOMINAL';
+
+    // ── Conversation ─────────────────────────────────────────────────────────
+    // Render any messages we haven't seen yet, in order, keyed by numeric ID.
+    // Works on initial connect (full history replay) and on live updates alike.
+    if (Array.isArray(state.messages)) {
+      const newMsgs = state.messages.filter(m => m.id > lastRenderedId);
+      newMsgs.forEach(m => {
+        addMessage(m.role, m.text);
+        lastRenderedId = Math.max(lastRenderedId, m.id);
+      });
+    }
+    // ─────────────────────────────────────────────────────────────────────────
+
+    // Memory
+    if (state.facts && state.facts.length > 0) {
+      document.getElementById('memoryList').innerHTML = state.facts.slice(-8).map(f =>
+        `<div class="memory-item"><span class="mem-cat">${f.category.toUpperCase()}</span> ${f.fact}</div>`
+      ).join('');
+    }
+  }
+
+  function formatMessage(raw) {
+    function esc(s) {
+      return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+    }
+
+    // Match ```lang\n...code...\n``` fences
+    const FENCE = /```(\w*)\n([\s\S]*?)```/g;
+    let result = '';
+    let lastIndex = 0;
+    let match;
+
+    while ((match = FENCE.exec(raw)) !== null) {
+      // Plain text before this fence
+      const before = raw.slice(lastIndex, match.index);
+      if (before.trim()) {
+        result += `<span class="msg-prose">${esc(before).replace(/\n/g,'<br>')}</span>`;
+      }
+      // Code block
+      const lang = match[1] || 'code';
+      const code = esc(match[2]);
+      result += `<div class="code-block">` +
+                `<div class="code-lang">${lang.toUpperCase()}</div>` +
+                `<pre><code>${code}</code></pre>` +
+                `</div>`;
+      lastIndex = match.index + match[0].length;
+    }
+
+    // Remaining text after last fence
+    const tail = raw.slice(lastIndex);
+    if (tail.trim()) {
+      result += `<span class="msg-prose">${esc(tail).replace(/\n/g,'<br>')}</span>`;
+    }
+
+    return result || esc(raw).replace(/\n/g,'<br>');
+  }
+
+  function addMessage(role, text) {
+    const area = document.getElementById('convoArea');
+    const div = document.createElement('div');
+    div.className = `msg ${role}`;
+    div.innerHTML = `
+      <div class="msg-label">${role === 'user' ? 'ADITYA' : 'ZERO'}</div>
+      <div class="msg-text">${formatMessage(text)}</div>
+    `;
+    area.appendChild(div);
+    // Keep the last 20 messages only
+    while (area.children.length > 20) area.removeChild(area.firstChild);
+    // Scroll to latest message
+    div.scrollIntoView({ behavior: 'smooth', block: 'end' });
+  }
+</script>
+</body>
+</html>
