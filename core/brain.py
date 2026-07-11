@@ -1,21 +1,23 @@
 # core/brain.py
 # ZERO's thinking engine — Groq (general) + Ollama (private)
 
-import os
-import re
 import json
-from groq import Groq
+import re
+
 import httpx
 from dotenv import load_dotenv
+from groq import Groq
+
+from core.config import settings
 from core.logger import log
-from core.memory import get_recent_conversation, get_all_facts, save_message, save_fact
+from core.memory import get_all_facts, get_recent_conversation, save_fact
 
 load_dotenv()
 
-GROQ_API_KEY    = os.getenv("GROQ_API_KEY")
-OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
-OLLAMA_MODEL    = os.getenv("OLLAMA_MODEL", "llama3")
-USER_NAME       = os.getenv("USER_NAME", "Aditya")
+GROQ_API_KEY    = settings.groq_api_key
+OLLAMA_BASE_URL = settings.ollama_base_url
+OLLAMA_MODEL    = settings.ollama_model
+USER_NAME       = settings.user_name
 
 groq_client = Groq(api_key=GROQ_API_KEY)
 
@@ -41,7 +43,7 @@ How you talk:
 - ALWAYS use conversation history. If a follow-up question is vague, figure out what he means from context. Never act like the previous message didn't happen.
 
 What you actually are (be honest when asked):
-- You run on Groq's API with Llama 3.1 8B Instant for cloud mode.
+- You run on Groq's API with {settings.groq_chat_model} for cloud mode.
 - Private mode routes to a local Ollama model — nothing leaves the machine.
 - Voice comes from ElevenLabs. Ears are Whisper via Groq API.
 - Memory lives in PostgreSQL with pgvector.
@@ -131,7 +133,7 @@ async def extract_and_save_facts(user_message: str, zero_response: str) -> bool:
     def _call():
         try:
             completion = groq_client.chat.completions.create(
-                model="llama-3.1-8b-instant",
+                    model=settings.groq_memory_model,
                 messages=[
                     {"role": "system", "content": MEMORY_EXTRACTOR_PROMPT},
                     {"role": "user", "content": exchange}
@@ -173,7 +175,7 @@ async def _think_groq(system_prompt: str, messages: list) -> str:
     def _call():
         try:
             completion = groq_client.chat.completions.create(
-                model="llama-3.1-8b-instant",
+                model=settings.groq_chat_model,
                 messages=[
                     {"role": "system", "content": system_prompt},
                     *messages

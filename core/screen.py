@@ -11,16 +11,19 @@
 #   After install, set TESSERACT_PATH in .env if not on system PATH
 #   e.g. TESSERACT_PATH=C:\Program Files\Tesseract-OCR\tesseract.exe
 
-import os
 import asyncio
+import os
 import tempfile
 from datetime import datetime
+
 from dotenv import load_dotenv
+
+from core.config import settings
 
 load_dotenv()
 
 # Optional: override tesseract path via .env
-TESSERACT_PATH = os.getenv("TESSERACT_PATH", "")
+TESSERACT_PATH = settings.tesseract_path
 
 # Screenshot save dir — kept for session, cleaned on next capture
 _SCREENSHOT_DIR = os.path.join(tempfile.gettempdir(), "zero_screenshots")
@@ -78,8 +81,8 @@ def _ocr_image(image_path: str) -> str:
 
         text = pytesseract.image_to_string(img, lang="eng")
         # Clean up: collapse excessive blank lines
-        lines = [l.rstrip() for l in text.splitlines()]
-        cleaned = "\n".join(l for l in lines if l.strip())
+        lines = [line.rstrip() for line in text.splitlines()]
+        cleaned = "\n".join(line for line in lines if line.strip())
         return cleaned
 
     except ImportError:

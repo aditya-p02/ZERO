@@ -7,19 +7,18 @@
 #   - Clicking by text only triggers OCR when explicitly needed, runs in thread pool
 #   - Everything async-wrapped so it never blocks ZERO's main loop
 
-import os
-import re
-import time
-import shutil
 import asyncio
+import os
+import shutil
 import subprocess
+import time
 from difflib import SequenceMatcher
 
 import pyautogui
 import pygetwindow as gw
 
-# Safety: disable pyautogui's corner-abort but keep a small pause between actions
-pyautogui.FAILSAFE = False
+# Keep PyAutoGUI's corner-abort enabled. Automation controls the real machine.
+pyautogui.FAILSAFE = True
 pyautogui.PAUSE = 0.05
 
 
@@ -294,7 +293,8 @@ def _find_text_on_screen(target_text: str) -> dict:
     try:
         import pytesseract
         from PIL import Image
-        from core.screen import _take_screenshot, _setup_tesseract
+
+        from core.screen import _setup_tesseract, _take_screenshot
 
         _setup_tesseract()
         path = _take_screenshot()

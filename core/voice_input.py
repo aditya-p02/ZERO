@@ -7,23 +7,29 @@
 #
 # No speaker verification. No guest/owner mode. No noise reduction. Anyone can talk to ZERO.
 
+import os
+import tempfile
+
 import numpy as np
 import sounddevice as sd
 import soundfile as sf
-import tempfile
-import os
-from groq import Groq
+import torch
 from dotenv import load_dotenv
+from groq import Groq
+
+from core.config import settings
 
 load_dotenv()
 
 groq_client = Groq(api_key=os.getenv("GROQ_API_KEY"))
 
 # Audio settings
-SAMPLE_RATE    = 16000
-SILENCE_THRESH = 0.004
-SILENCE_SECS   = 1.5
-MAX_CMD_SECS   = 30
+SAMPLE_RATE     = 16000
+VAD_SPEECH_PROB = 0.5   # Silero VAD speech-probability threshold.
+                         # Replaces the old fixed amplitude SILENCE_THRESH=0.004,
+                         # which discarded quiet/far speech regardless of content.
+SILENCE_SECS    = 1.5
+MAX_CMD_SECS    = 30
 
 # Minimum speech blocks to be worth transcribing
 _SPEECH_START_BLOCKS = 4
@@ -31,6 +37,9 @@ _MIN_SPEECH_BLOCKS   = 10
 
 # Lazy-loaded local Whisper model
 _local_model = None
+
+# Lazy-loaded Silero VAD model
+_vad_model = None
 
 
 # ── Local model loader ─────────────────────────────────────────────────────────
@@ -45,6 +54,31 @@ def _get_local_model():
     return _local_model
 
 
+# ── VAD model loader ────────────────────────────────────────────────────────────
+
+def _get_vad_model():
+    global _vad_model
+    if _vad_model is None:
+        print("[ZERO] Loading Silero VAD... (one-time)")
+        from silero_vad import load_silero_vad
+        _vad_model = load_silero_vad(onnx=True)  # onnx backend — lighter than full torch inference
+        print("[ZERO] VAD ready.")
+    return _vad_model
+
+
+def _is_speech(block: np.ndarray) -> bool:
+    """
+    Classify one audio block as speech using Silero VAD — real speech-pattern
+    recognition, not raw loudness. This is what makes quiet or far-from-mic
+    speech reliable; a fixed amplitude threshold cannot distinguish "quiet
+    speech" from "silence" the way a trained VAD model can.
+    """
+    model = _get_vad_model()
+    with torch.no_grad():
+        prob = model(torch.from_numpy(block), SAMPLE_RATE).item()
+    return prob > VAD_SPEECH_PROB
+
+
 # ── Audio helpers ──────────────────────────────────────────────────────────────
 
 def _record_until_silence() -> tuple[np.ndarray, bool]:
@@ -57,6 +91,9 @@ def _record_until_silence() -> tuple[np.ndarray, bool]:
     Phase B — record: capture until SILENCE_SECS of silence or MAX_CMD_SECS.
 
     speech_detected=False means it was a cough/thump — skip transcription.
+
+    Speech/silence classification uses Silero VAD (_is_speech), not raw
+    amplitude — this is what makes quiet or far-from-mic speech reliable.
     """
     block_size     = int(SAMPLE_RATE * 0.1)   # 0.1s per block
     max_blocks     = int(MAX_CMD_SECS / 0.1)
@@ -70,7 +107,7 @@ def _record_until_silence() -> tuple[np.ndarray, bool]:
         while True:
             block, _ = stream.read(block_size)
             block = block.flatten()
-            if np.abs(block).mean() > SILENCE_THRESH:
+            if _is_speech(block):
                 onset_count += 1
                 if onset_count >= _SPEECH_START_BLOCKS:
                     recorded = [block]
@@ -86,7 +123,7 @@ def _record_until_silence() -> tuple[np.ndarray, bool]:
             block, _ = stream.read(block_size)
             block = block.flatten()
             recorded.append(block)
-            if np.abs(block).mean() > SILENCE_THRESH:
+            if _is_speech(block):
                 speech_blocks += 1
                 silent_count = 0
             else:
@@ -114,7 +151,7 @@ def _transcribe_groq(audio: np.ndarray) -> str:
     try:
         with open(wav_path, "rb") as f:
             result = groq_client.audio.transcriptions.create(
-                model="whisper-large-v3",
+                model=settings.groq_transcribe_model,
                 file=f,
                 language="en"
             )

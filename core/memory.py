@@ -1,23 +1,22 @@
 # core/memory.py
 # ZERO's memory system — PostgreSQL + pgvector
 
-import os
-import json
 import asyncio
-from datetime import datetime
-from typing import Optional
+
 import asyncpg
 from dotenv import load_dotenv
+
+from core.config import settings
 from core.logger import log
 
 load_dotenv()
 
 DB_CONFIG = {
-    "host": os.getenv("POSTGRES_HOST", "localhost"),
-    "port": int(os.getenv("POSTGRES_PORT", 5433)),
-    "database": os.getenv("POSTGRES_DB", "zero_memory"),
-    "user": os.getenv("POSTGRES_USER", "zero"),
-    "password": os.getenv("POSTGRES_PASSWORD", "zero_secure_pass"),
+    "host": settings.postgres_host,
+    "port": settings.postgres_port,
+    "database": settings.postgres_db,
+    "user": settings.postgres_user,
+    "password": settings.postgres_password,
 }
 
 _pool = None
@@ -154,7 +153,7 @@ async def save_message(role: str, content: str):
                     role, content
                 )
             return
-        except (asyncpg.PostgresConnectionError, OSError) as e:
+        except (asyncpg.PostgresConnectionError, OSError):
             if attempt == 0:
                 log.warning("save_message: connection lost, resetting pool and retrying")
                 await reset_pool()
@@ -174,7 +173,7 @@ async def get_recent_conversation(limit: int = 20) -> list:
                     limit
                 )
             return [{"role": r["role"], "content": r["content"]} for r in reversed(rows)]
-        except (asyncpg.PostgresConnectionError, OSError) as e:
+        except (asyncpg.PostgresConnectionError, OSError):
             if attempt == 0:
                 log.warning("get_recent_conversation: connection lost, resetting pool and retrying")
                 await reset_pool()
@@ -194,7 +193,7 @@ async def save_fact(category: str, fact: str):
                     category, fact
                 )
             return
-        except (asyncpg.PostgresConnectionError, OSError) as e:
+        except (asyncpg.PostgresConnectionError, OSError):
             if attempt == 0:
                 log.warning("save_fact: connection lost, resetting pool and retrying")
                 await reset_pool()
@@ -213,7 +212,7 @@ async def get_all_facts() -> list:
                     "SELECT category, fact FROM user_facts ORDER BY timestamp DESC"
                 )
             return [{"category": r["category"], "fact": r["fact"]} for r in rows]
-        except (asyncpg.PostgresConnectionError, OSError) as e:
+        except (asyncpg.PostgresConnectionError, OSError):
             if attempt == 0:
                 log.warning("get_all_facts: connection lost, resetting pool and retrying")
                 await reset_pool()
@@ -237,7 +236,12 @@ async def get_tasks(status: str = "pending") -> list:
     pool = await get_pool()
     async with pool.acquire() as conn:
         rows = await conn.fetch(
-            "SELECT id, title, priority, notes FROM tasks WHERE status = $1 ORDER BY created_at DESC",
+            """
+            SELECT id, title, priority, notes
+            FROM tasks
+            WHERE status = $1
+            ORDER BY created_at DESC
+            """,
             status
         )
     return [dict(r) for r in rows]

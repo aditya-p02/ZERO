@@ -17,9 +17,10 @@
 #   - Console (always)
 #   - zero.log in the project root (always, survives restarts, great for post-mortem)
 
-import os
 import logging
+import os
 from logging.handlers import RotatingFileHandler
+
 from dotenv import load_dotenv
 
 load_dotenv()

@@ -2,14 +2,13 @@
 # ZERO's sandboxed code executor
 # Runs Python code safely with timeout, captured output, no system damage
 
-import sys
-import io
 import ast
-import traceback
 import asyncio
+import io
 import os
 import threading
-from contextlib import redirect_stdout, redirect_stderr
+import traceback
+from contextlib import redirect_stderr, redirect_stdout
 
 # signal is Unix-only
 if os.name != 'nt':

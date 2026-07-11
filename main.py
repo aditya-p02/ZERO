@@ -2,20 +2,23 @@
 # ZERO — Entry point
 
 import asyncio
-import os
 import re
 import webbrowser
+
 from dotenv import load_dotenv
-from core.memory import init_memory, save_fact, get_all_facts, save_message
-from core.brain import think, extract_and_save_facts
+
+from agents.router import classify
+from core.brain import extract_and_save_facts, think
+from core.config import settings
+from core.memory import get_all_facts, init_memory, save_fact, save_message
 from core.voice_input import listen
 from core.voice_output import speak_async
-from hud.server import broadcast as _hud_broadcast, start_server as _hud_start_server
-from agents.router import classify
+from hud.server import broadcast as _hud_broadcast
+from hud.server import start_server as _hud_start_server
 
 load_dotenv()
 
-USER_NAME = os.getenv("USER_NAME", "Aditya")
+USER_NAME = settings.user_name
 
 BANNER = """
 ╔══════════════════════════════════════════╗
@@ -207,7 +210,11 @@ async def main():
                     break
 
                 print(f"{'🔒 ' if private else ''}{USER_NAME}: {user_input}")
-                await hud_update({"status": "thinking", "user_input": user_input, "new_user_msg": user_input})
+                await hud_update({
+                    "status": "thinking",
+                    "user_input": user_input,
+                    "new_user_msg": user_input,
+                })
 
             else:
                 user_input = input(f"{USER_NAME}: ").strip()
@@ -233,7 +240,11 @@ async def main():
                     print(f"\nZERO: {farewell}")
                     break
 
-                await hud_update({"status": "thinking", "user_input": user_input, "new_user_msg": user_input})
+                await hud_update({
+                    "status": "thinking",
+                    "user_input": user_input,
+                    "new_user_msg": user_input,
+                })
 
             # Manual remember command
             if user_input.lower().startswith("/remember "):
@@ -259,7 +270,7 @@ async def main():
             print(f"[ZERO] Intent → {intent}")
 
             # Think / dispatch
-            print(f"\nZERO: ", end="", flush=True)
+            print("\nZERO: ", end="", flush=True)
             await hud_update({"status": "thinking"})
             response = await handle_intent(intent, user_input, private)
             _turn_count += 1

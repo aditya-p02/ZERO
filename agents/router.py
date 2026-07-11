@@ -4,8 +4,11 @@
 
 import os
 import re
-from groq import Groq
+
 from dotenv import load_dotenv
+from groq import Groq
+
+from core.config import settings
 from core.logger import log
 
 load_dotenv()
@@ -43,6 +46,8 @@ _KEYWORD_MAP = {
         "refactor", "optimise", "optimize",
     ],
     "automation": [
+        "open notepad", "open chrome", "open calculator", "open spotify",
+        "open vscode", "open vs code", "open settings", "open file explorer",
         "open app", "open the app", "close app", "close the",
         "click on", "launch", "minimize", "maximize",
         "move the mouse", "press", "hotkey", "key combination",
@@ -86,7 +91,7 @@ _FOLLOWUP_PHRASES = [
     "i mean", "i'm asking", "asking about",
 ]
 
-_CLASSIFIER_PROMPT = f"""
+_CLASSIFIER_PROMPT = """
 You are an intent classifier for an AI assistant called ZERO.
 Classify the user's message into exactly one of these intents:
 
@@ -162,7 +167,7 @@ def _keyword_match(text: str) -> str | None:
 def _groq_classify(text: str) -> str:
     try:
         completion = groq_client.chat.completions.create(
-            model="llama-3.1-8b-instant",
+            model=settings.groq_router_model,
             messages=[
                 {"role": "system", "content": _CLASSIFIER_PROMPT},
                 {"role": "user", "content": text},

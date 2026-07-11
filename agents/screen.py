@@ -2,11 +2,14 @@
 # ZERO's screen vision agent
 # Handles: "what's on my screen", "read this", "what does this error say", "describe my screen"
 
-import os
 import asyncio
-from groq import Groq
+import os
+
 from dotenv import load_dotenv
-from core.screen import capture_async, get_last_screenshot
+from groq import Groq
+
+from core.config import settings
+from core.screen import capture_async
 
 load_dotenv()
 
@@ -34,7 +37,7 @@ def _analyse(user_message: str, ocr_text: str) -> str:
         screen_context = f"=== SCREEN CONTENT (via OCR) ===\n{ocr_text}\n=== END SCREEN CONTENT ==="
 
         completion = groq_client.chat.completions.create(
-            model="llama-3.1-8b-instant",
+            model=settings.groq_screen_model,
             messages=[
                 {"role": "system", "content": SCREEN_ANALYST_PROMPT},
                 {"role": "user", "content": f"{screen_context}\n\nUser question: {user_message}"},

@@ -3,19 +3,29 @@
 # Groq interprets messy/natural phrasing into structured actions, instead of
 # requiring exact keyword matches.
 
+import asyncio
+import json
 import os
 import re
-import json
-import asyncio
-from groq import Groq
+
 from dotenv import load_dotenv
-from core.logger import log
+from groq import Groq
+
 from core.automator import (
-    open_app_async, close_app_async, focus_app_async,
-    minimize_app_async, maximize_app_async,
-    type_text_async, press_key_async, hotkey_async,
-    click_text_async, scroll_async, list_open_windows,
+    click_text_async,
+    close_app_async,
+    focus_app_async,
+    hotkey_async,
+    list_open_windows,
+    maximize_app_async,
+    minimize_app_async,
+    open_app_async,
+    press_key_async,
+    scroll_async,
+    type_text_async,
 )
+from core.config import settings
+from core.logger import log
 
 load_dotenv()
 
@@ -92,7 +102,7 @@ def _interpret_command(user_message: str) -> dict:
     """Send the raw message to Groq, get back a structured action."""
     try:
         completion = groq_client.chat.completions.create(
-            model="llama-3.1-8b-instant",
+            model=settings.groq_automation_model,
             messages=[
                 {"role": "system", "content": _COMMAND_INTERPRETER_PROMPT},
                 {"role": "user", "content": user_message},

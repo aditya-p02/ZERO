@@ -1,13 +1,16 @@
 # agents/developer.py
 # ZERO's code agent — write, explain, debug, and execute code
 
+import asyncio
 import os
 import re
-import asyncio
-from groq import Groq
+
 from dotenv import load_dotenv
-from core.logger import log
+from groq import Groq
+
+from core.config import settings
 from core.executor import execute
+from core.logger import log
 
 load_dotenv()
 
@@ -43,7 +46,8 @@ When asked to write code:
 - Write clean, working code. No placeholders, no "TODO" comments.
 - Use Python unless another language is explicitly requested.
 - Always wrap executable code in a ```python block so it can be run.
-- NEVER use input() — hardcode example values instead (e.g. n = 20) with a comment like # change this
+- NEVER use input() — hardcode example values instead (e.g. n = 20)
+  with a comment like # change this
 - NEVER use open(), file I/O, subprocess, os.system, os, sys, socket, or requests
 - NEVER use infinite loops without a clear exit condition
 - For demos, always use hardcoded test values so the code runs and produces output immediately.
@@ -94,7 +98,7 @@ def _decide_action(user_message: str) -> str:
     """Groq fallback only for genuinely ambiguous cases."""
     try:
         completion = groq_client.chat.completions.create(
-            model="llama-3.1-8b-instant",
+            model=settings.groq_code_model,
             messages=[
                 {"role": "user", "content": CODE_DECISION_PROMPT.format(message=user_message)},
             ],
@@ -131,11 +135,7 @@ def _strip_input_calls(code: str) -> str:
 
     class _InputReplacer(_ast.NodeTransformer):
         def visit_Call(self, node):
-            self.generic_visit(node)  # bottom-up so nested calls resolve first
-
             func = node.func
-            if isinstance(func, _ast.Name) and func.id == "input":
-                return _ast.Constant(value="")
 
             if (
                 isinstance(func, _ast.Name)
@@ -147,6 +147,11 @@ def _strip_input_calls(code: str) -> str:
             ):
                 replacements = {"int": 0, "float": 0.0, "str": ""}
                 return _ast.Constant(value=replacements[func.id])
+
+            self.generic_visit(node)
+
+            if isinstance(func, _ast.Name) and func.id == "input":
+                return _ast.Constant(value="")
 
             return node
 
@@ -170,7 +175,7 @@ def _write_code(user_message: str, prior_code: str | None = None) -> str:
 
     try:
         completion = groq_client.chat.completions.create(
-            model="llama-3.1-8b-instant",
+            model=settings.groq_code_model,
             messages=messages,
             temperature=0.3,
             max_tokens=800,
@@ -213,7 +218,7 @@ def _format_execution_result(result: dict, voice_mode: bool = False) -> str:
             error = "\n".join(lines[-8:])
         if voice_mode:
             # Extract just the last error line for speaking
-            last_line = [l for l in lines if l.strip()][-1] if lines else error
+            last_line = [line for line in lines if line.strip()][-1] if lines else error
             return f"The code hit an error: {last_line}"
         return f"Code ran but hit an error:\n```\n{error}\n```{stderr_note}"
 
@@ -251,10 +256,13 @@ async def develop(user_message: str, voice_mode: bool = False) -> str:
     # ── Step 1: "Run this" ────────────────────────────────────────────────────
     if _is_run_request(user_message):
         if _last_written_code is None:
-            return "I don't have any code from this session to run. Ask me to write something first."
+            return (
+                "I don't have any code from this session to run. "
+                "Ask me to write something first."
+            )
 
         safe_code = _strip_input_calls(_last_written_code)
-        print(f"[ZERO] Executing stored code...")
+        print("[ZERO] Executing stored code...")
         result = await execute(safe_code)
         return _format_execution_result(result, voice_mode=voice_mode)
 
@@ -287,7 +295,7 @@ async def develop(user_message: str, voice_mode: bool = False) -> str:
 
     # Execute path
     safe_code = _strip_input_calls(code)
-    print(f"[ZERO] Executing code...")
+    print("[ZERO] Executing code...")
     result = await execute(safe_code)
     execution_summary = _format_execution_result(result, voice_mode=voice_mode)
 

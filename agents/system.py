@@ -3,14 +3,16 @@
 # Handles: volume, brightness, battery/CPU/RAM status, sleep
 # Deliberately excludes: shutdown, restart, anything touching personal files/data
 
-import re
 import asyncio
+import re
+
 import psutil
 
 # ── Volume control (Windows — pycaw) ───────────────────────────────────────────
 
 def _get_volume_interface():
-    from ctypes import cast, POINTER
+    from ctypes import POINTER, cast
+
     from comtypes import CLSCTX_ALL
     from pycaw.pycaw import AudioUtilities, IAudioEndpointVolume
 
@@ -173,7 +175,7 @@ def _handle(user_message: str) -> str:
         if "up" in lower or "increase" in lower or "raise" in lower or "brighter" in lower:
             num = _extract_number(lower)
             return _adjust_brightness(num if num else 10)
-        if "down" in lower or "decrease" in lower or "lower" in lower or "dimmer" in lower or "dim" in lower:
+        if any(word in lower for word in ("down", "decrease", "lower", "dimmer", "dim")):
             num = _extract_number(lower)
             return _adjust_brightness(-(num if num else 10))
         if "set" in lower or "%" in lower:
@@ -200,7 +202,10 @@ def _handle(user_message: str) -> str:
     if "status" in lower or "stats" in lower or "system" in lower:
         return _get_full_status()
 
-    return "Not sure what system action you want — try volume, brightness, battery, CPU, RAM, disk, or sleep."
+    return (
+        "Not sure what system action you want — try volume, brightness, "
+        "battery, CPU, RAM, disk, or sleep."
+    )
 
 
 async def handle_system(user_message: str) -> str:

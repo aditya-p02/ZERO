@@ -6,15 +6,15 @@
 # Modes        — OWNER (only Aditya) / GUEST (anyone)
 # Switching    — guest mode only activates if Aditya's voice authorizes it
 
+import asyncio
 import os
-import sys
+import tempfile
 import warnings
+from pathlib import Path
+
 import numpy as np
 import sounddevice as sd
 import soundfile as sf
-import tempfile
-import asyncio
-from pathlib import Path
 from dotenv import load_dotenv
 
 # Suppress SpeechBrain's broken k2_fsa lazy-import warning — it's an optional
@@ -51,7 +51,9 @@ _rejection_index = 0
 # SpeechBrain call and crash _embed() if Resemblyzer hasn't already claimed
 # its namespace. Loading eagerly here wins the race permanently.
 print("[ZERO] Loading voice encoder...")
-from resemblyzer import VoiceEncoder, preprocess_wav as _preprocess_wav
+from resemblyzer import VoiceEncoder  # noqa: E402
+from resemblyzer import preprocess_wav as _preprocess_wav  # noqa: E402
+
 _encoder = VoiceEncoder(device="cpu")
 print("[ZERO] Voice encoder ready.")
 

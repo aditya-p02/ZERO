@@ -1,12 +1,15 @@
 # agents/research.py
 # ZERO's research agent — DDGS search + Groq synthesis
 
+import asyncio
 import os
 import re
-import asyncio
-from groq import Groq
+
 from ddgs import DDGS
 from dotenv import load_dotenv
+from groq import Groq
+
+from core.config import settings
 from core.logger import log
 from core.memory import get_recent_conversation
 
@@ -55,7 +58,7 @@ def _extract_query(user_message: str, history: list = None) -> str:
     
     try:
         completion = groq_client.chat.completions.create(
-            model="llama-3.1-8b-instant",
+            model=settings.groq_research_model,
             messages=messages,
             temperature=0.0,
             max_tokens=20,
@@ -103,7 +106,7 @@ def _synthesize(query: str, results_text: str, history: list = None) -> str:
     
     try:
         completion = groq_client.chat.completions.create(
-            model="llama-3.1-8b-instant",
+            model=settings.groq_research_model,
             messages=messages,
             temperature=0.3,
             max_tokens=600,

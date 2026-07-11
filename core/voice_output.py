@@ -1,16 +1,19 @@
 # core/voice_output.py
 # ZERO's voice — ElevenLabs primary, edge-tts fallback (auto, no credits needed)
 
+import asyncio
 import os
 import re
-import asyncio
 import tempfile
 import time
+
 from dotenv import load_dotenv
+
+from core.config import settings
 
 load_dotenv()
 
-ELEVENLABS_API_KEY = os.getenv("ELEVENLABS_API_KEY")
+ELEVENLABS_API_KEY = settings.elevenlabs_api_key
 VOICE_ID = "iP95p4xoKVk53GoZ742B"  # Josh — deep, calm, works on free tier
 
 EDGE_FALLBACK_VOICE = "en-US-GuyNeural"
