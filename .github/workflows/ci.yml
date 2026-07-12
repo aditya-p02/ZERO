@@ -1,0 +1,40 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  lint-and-test:
+    # Windows, not Ubuntu: pygetwindow raises NotImplementedError on import on
+    # Linux (it has no Linux backend at all), and this project's own deps
+    # (comtypes, pycaw) are Windows-only. The runtime target is Windows, so
+    # CI should match that instead of pretending the app is cross-platform.
+    runs-on: windows-latest
+
+    env:
+      # core/brain.py, core/voice_input.py, agents/router.py,
+      # agents/developer.py, agents/automation.py, agents/research.py, and
+      # agents/screen.py all construct a Groq client at import time. The SDK
+      # raises if no key is present at all, even for tests that never call
+      # the API, so a dummy value is required just to make the modules
+      # importable. Do not put a real key here.
+      GROQ_API_KEY: "dummy-ci-key"
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Ruff
+        run: ruff check .
+
+      - name: Pytest
+        run: pytest
