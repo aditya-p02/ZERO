@@ -1,4 +1,7 @@
-from agents.router import _is_followup, _keyword_match, classify
+from unittest.mock import MagicMock
+
+import agents.router as router
+from agents.router import _groq_classify, _is_followup, _keyword_match, classify
 
 
 def test_fresh_question_is_not_followup():
@@ -36,3 +39,27 @@ def test_memory_keywords_route_to_memory():
 def test_system_keywords_route_to_system():
     assert _keyword_match("how's the system doing") == "system"
     assert _keyword_match("battery status") == "system"
+
+
+def test_groq_fallback_uses_injected_client(monkeypatch):
+    """
+    Phase 2 proof: before the shared-client refactor, swapping in a fake
+    Groq client meant intercepting `Groq(api_key=os.getenv(...))` at
+    import time in whichever of the 7 files you were testing — order-
+    dependent and fragile once a module was already imported elsewhere
+    in the test session. Now there's exactly one place the client comes
+    from, so injecting a fake is a single, ordinary attribute patch on
+    this module's own reference — no import-time interception needed.
+    """
+    fake_response = MagicMock()
+    fake_response.choices[0].message.content = "research"
+
+    fake_client = MagicMock()
+    fake_client.chat.completions.create.return_value = fake_response
+
+    monkeypatch.setattr(router, "groq_client", fake_client)
+
+    result = _groq_classify("some ambiguous message with no keyword hits")
+
+    assert result == "research"
+    fake_client.chat.completions.create.assert_called_once()
