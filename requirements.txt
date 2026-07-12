@@ -1,29 +1,30 @@
-asyncpg
-comtypes; platform_system == "Windows"
-ddgs
-edge-tts
-elevenlabs
-faster-whisper
-groq
-httpx
-mss
-numpy
-pillow
-psutil
-pyautogui
-pycaw; platform_system == "Windows"
-pygame
-pygetwindow
-pytesseract
-python-dotenv
-screen-brightness-control
-silero-vad
-onnxruntime
-sounddevice
-soundfile
-websockets
+asyncpg==0.31.0
+comtypes==1.4.16; platform_system == "Windows"
+ddgs==9.14.4
+edge-tts==7.2.8
+elevenlabs==2.54.0
+faster-whisper==1.2.1
+groq==1.5.0
+httpx==0.28.1
+mss==10.2.0
+numpy==2.4.6
+pillow==12.2.0
+psutil==7.2.2
+pyautogui==0.9.54
+pycaw==20251023; platform_system == "Windows"
+pygame==2.6.1
+pygetwindow==0.0.9
+pytesseract==0.3.13
+python-dotenv==1.0.1
+screen-brightness-control==0.27.2
+silero-vad==6.2.1
+onnxruntime==1.26.0
+sounddevice==0.5.5
+soundfile==0.14.0
+torch==2.12.0
+websockets==16.0
 
 # Development / verification
-pytest
-pytest-asyncio
-ruff
+pytest==9.1.1
+pytest-asyncio==1.4.0
+ruff==0.15.21
