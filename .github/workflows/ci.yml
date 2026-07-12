@@ -11,6 +11,7 @@ jobs:
     # (comtypes, pycaw) are Windows-only. The runtime target is Windows, so
     # CI should match that instead of pretending the app is cross-platform.
     runs-on: windows-latest
+    timeout-minutes: 25
 
     env:
       # core/brain.py, core/voice_input.py, agents/router.py,
@@ -27,6 +28,17 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
+
+      - name: Exclude Python paths from Windows Defender
+        # Without this, Defender's real-time scan inspects every file pip
+        # writes. That's negligible for small packages, but torch,
+        # transformers, huggingface_hub, and tokenizers each unpack into
+        # thousands of small files — with scanning on, that step alone can
+        # take hours instead of minutes on GitHub's windows-latest runners.
+        shell: powershell
+        run: |
+          Add-MpPreference -ExclusionPath "C:\hostedtoolcache\windows\Python"
+          Add-MpPreference -ExclusionPath "$env:LOCALAPPDATA\pip\cache"
 
       - name: Install dependencies
         run: |
