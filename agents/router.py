@@ -2,18 +2,15 @@
 # ZERO's intent classifier — Hybrid mode
 # Keywords first (instant), Groq fallback (when ambiguous)
 
-import os
 import re
 
 from dotenv import load_dotenv
-from groq import Groq
 
+from core.clients import groq_client
 from core.config import settings
 from core.logger import log
 
 load_dotenv()
-
-groq_client = Groq(api_key=os.getenv("GROQ_API_KEY"))
 
 INTENTS = [
     "general",

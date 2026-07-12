@@ -6,15 +6,14 @@ import os
 import re
 
 from dotenv import load_dotenv
-from groq import Groq
 
+from core.clients import groq_client
 from core.config import settings
 from core.executor import execute
 from core.logger import log
 
 load_dotenv()
 
-groq_client = Groq(api_key=os.getenv("GROQ_API_KEY"))
 USER_NAME = os.getenv("USER_NAME", "Aditya")
 
 # ── Session state ──────────────────────────────────────────────────────────────

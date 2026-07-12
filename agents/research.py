@@ -7,15 +7,14 @@ import re
 
 from ddgs import DDGS
 from dotenv import load_dotenv
-from groq import Groq
 
+from core.clients import groq_client
 from core.config import settings
 from core.logger import log
 from core.memory import get_recent_conversation
 
 load_dotenv()
 
-groq_client = Groq(api_key=os.getenv("GROQ_API_KEY"))
 USER_NAME = os.getenv("USER_NAME", "Aditya")
 
 RESEARCH_PROMPT = f"""

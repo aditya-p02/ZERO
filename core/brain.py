@@ -6,20 +6,17 @@ import re
 
 import httpx
 from dotenv import load_dotenv
-from groq import Groq
 
+from core.clients import groq_client
 from core.config import settings
 from core.logger import log
 from core.memory import get_all_facts, get_recent_conversation, save_fact
 
 load_dotenv()
 
-GROQ_API_KEY    = settings.groq_api_key
 OLLAMA_BASE_URL = settings.ollama_base_url
 OLLAMA_MODEL    = settings.ollama_model
 USER_NAME       = settings.user_name
-
-groq_client = Groq(api_key=GROQ_API_KEY)
 
 ZERO_SOUL = f"""
 You are ZERO — {USER_NAME}'s personal AI. Not an assistant. Not a tool. More like a friend who happens to know everything.

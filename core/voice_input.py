@@ -15,13 +15,11 @@ import sounddevice as sd
 import soundfile as sf
 import torch
 from dotenv import load_dotenv
-from groq import Groq
 
+from core.clients import groq_client
 from core.config import settings
 
 load_dotenv()
-
-groq_client = Groq(api_key=os.getenv("GROQ_API_KEY"))
 
 # Audio settings
 SAMPLE_RATE     = 16000

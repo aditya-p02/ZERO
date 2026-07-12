@@ -6,14 +6,13 @@ import asyncio
 import os
 
 from dotenv import load_dotenv
-from groq import Groq
 
+from core.clients import groq_client
 from core.config import settings
 from core.screen import capture_async
 
 load_dotenv()
 
-groq_client = Groq(api_key=os.getenv("GROQ_API_KEY"))
 USER_NAME = os.getenv("USER_NAME", "Aditya")
 
 SCREEN_ANALYST_PROMPT = f"""

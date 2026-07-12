@@ -5,11 +5,9 @@
 
 import asyncio
 import json
-import os
 import re
 
 from dotenv import load_dotenv
-from groq import Groq
 
 from core.automator import (
     click_text_async,
@@ -24,12 +22,11 @@ from core.automator import (
     scroll_async,
     type_text_async,
 )
+from core.clients import groq_client
 from core.config import settings
 from core.logger import log
 
 load_dotenv()
-
-groq_client = Groq(api_key=os.getenv("GROQ_API_KEY"))
 
 _KEY_ALIASES = {
     "enter": "enter", "return": "enter",
