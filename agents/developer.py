@@ -2,19 +2,14 @@
 # ZERO's code agent — write, explain, debug, and execute code
 
 import asyncio
-import os
 import re
-
-from dotenv import load_dotenv
 
 from core.clients import groq_client
 from core.config import settings
 from core.executor import execute
 from core.logger import log
 
-load_dotenv()
-
-USER_NAME = os.getenv("USER_NAME", "Aditya")
+USER_NAME = settings.user_name
 
 # ── Session state ──────────────────────────────────────────────────────────────
 _last_written_code: str | None = None   # raw code from last write

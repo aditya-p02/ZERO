@@ -21,12 +21,9 @@ import logging
 import os
 from logging.handlers import RotatingFileHandler
 
-from dotenv import load_dotenv
+from core.config import settings
 
-load_dotenv()
-
-_LOG_LEVEL_STR = os.getenv("LOG_LEVEL", "INFO").upper()
-_LOG_LEVEL = getattr(logging, _LOG_LEVEL_STR, logging.INFO)
+_LOG_LEVEL = getattr(logging, settings.log_level, logging.INFO)
 
 _LOG_FORMAT = "[ZERO] %(asctime)s [%(levelname)s] %(name)s — %(message)s"
 _DATE_FORMAT = "%H:%M:%S"

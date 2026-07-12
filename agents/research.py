@@ -2,20 +2,16 @@
 # ZERO's research agent — DDGS search + Groq synthesis
 
 import asyncio
-import os
 import re
 
 from ddgs import DDGS
-from dotenv import load_dotenv
 
 from core.clients import groq_client
 from core.config import settings
 from core.logger import log
 from core.memory import get_recent_conversation
 
-load_dotenv()
-
-USER_NAME = os.getenv("USER_NAME", "Aditya")
+USER_NAME = settings.user_name
 
 RESEARCH_PROMPT = f"""
 You are ZERO — {USER_NAME}'s personal AI.

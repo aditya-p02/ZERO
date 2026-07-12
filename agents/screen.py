@@ -3,17 +3,12 @@
 # Handles: "what's on my screen", "read this", "what does this error say", "describe my screen"
 
 import asyncio
-import os
-
-from dotenv import load_dotenv
 
 from core.clients import groq_client
 from core.config import settings
 from core.screen import capture_async
 
-load_dotenv()
-
-USER_NAME = os.getenv("USER_NAME", "Aditya")
+USER_NAME = settings.user_name
 
 SCREEN_ANALYST_PROMPT = f"""
 You are ZERO — {USER_NAME}'s personal AI with the ability to see his screen.
