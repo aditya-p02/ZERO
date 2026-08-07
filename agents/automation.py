@@ -7,8 +7,6 @@ import asyncio
 import json
 import re
 
-from dotenv import load_dotenv
-
 from core.automator import (
     click_text_async,
     close_app_async,
@@ -25,8 +23,6 @@ from core.automator import (
 from core.clients import groq_client
 from core.config import settings
 from core.logger import log
-
-load_dotenv()
 
 _KEY_ALIASES = {
     "enter": "enter", "return": "enter",

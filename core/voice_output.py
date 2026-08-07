@@ -7,11 +7,7 @@ import re
 import tempfile
 import time
 
-from dotenv import load_dotenv
-
 from core.config import settings
-
-load_dotenv()
 
 ELEVENLABS_API_KEY = settings.elevenlabs_api_key
 VOICE_ID = "iP95p4xoKVk53GoZ742B"  # Josh — deep, calm, works on free tier

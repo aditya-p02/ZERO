@@ -4,12 +4,8 @@
 import asyncio
 
 import asyncpg
-from dotenv import load_dotenv
-
 from core.config import settings
 from core.logger import log
-
-load_dotenv()
 
 DB_CONFIG = {
     "host": settings.postgres_host,
@@ -223,28 +219,47 @@ async def get_all_facts() -> list:
 
 async def save_task(title: str, priority: str = "normal", notes: str = ""):
     """Log a task or goal."""
-    pool = await get_pool()
-    async with pool.acquire() as conn:
-        await conn.execute(
-            "INSERT INTO tasks (title, priority, notes) VALUES ($1, $2, $3)",
-            title, priority, notes
-        )
+    for attempt in range(2):
+        try:
+            pool = await get_pool()
+            async with pool.acquire() as conn:
+                await conn.execute(
+                    "INSERT INTO tasks (title, priority, notes) VALUES ($1, $2, $3)",
+                    title, priority, notes
+                )
+            return
+        except (asyncpg.PostgresConnectionError, OSError):
+            if attempt == 0:
+                log.warning("save_task: connection lost, resetting pool and retrying")
+                await reset_pool()
+            else:
+                log.error("save_task: failed after pool reset", exc_info=True)
+                raise
 
 
 async def get_tasks(status: str = "pending") -> list:
     """Get tasks by status."""
-    pool = await get_pool()
-    async with pool.acquire() as conn:
-        rows = await conn.fetch(
-            """
-            SELECT id, title, priority, notes
-            FROM tasks
-            WHERE status = $1
-            ORDER BY created_at DESC
-            """,
-            status
-        )
-    return [dict(r) for r in rows]
+    for attempt in range(2):
+        try:
+            pool = await get_pool()
+            async with pool.acquire() as conn:
+                rows = await conn.fetch(
+                    """
+                    SELECT id, title, priority, notes
+                    FROM tasks
+                    WHERE status = $1
+                    ORDER BY created_at DESC
+                    """,
+                    status
+                )
+            return [dict(r) for r in rows]
+        except (asyncpg.PostgresConnectionError, OSError):
+            if attempt == 0:
+                log.warning("get_tasks: connection lost, resetting pool and retrying")
+                await reset_pool()
+            else:
+                log.error("get_tasks: failed after pool reset", exc_info=True)
+                return []  # degrade gracefully — return empty rather than crashing
 
 
 async def close_pool():

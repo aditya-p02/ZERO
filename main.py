@@ -5,18 +5,14 @@ import asyncio
 import re
 import webbrowser
 
-from dotenv import load_dotenv
-
 from agents.router import classify
 from core.brain import extract_and_save_facts, think
 from core.config import settings
-from core.memory import get_all_facts, init_memory, save_fact, save_message
+from core.memory import close_pool, get_all_facts, init_memory, save_fact, save_message
 from core.voice_input import listen
 from core.voice_output import speak_async
 from hud.server import broadcast as _hud_broadcast
 from hud.server import start_server as _hud_start_server
-
-load_dotenv()
 
 USER_NAME = settings.user_name
 
@@ -173,132 +169,135 @@ async def main():
     private = False
     _turn_count = 0  # tracks turns so the router knows if prior conversation exists
 
-    while True:
-        try:
-            if voice_mode:
-                await hud_update({"status": "listening", "user_input": ""})
-                user_input = listen(private=private)
+    try:
+        while True:
+            try:
+                if voice_mode:
+                    await hud_update({"status": "listening", "user_input": ""})
+                    user_input = listen(private=private)
 
-                if not user_input:
-                    continue
+                    if not user_input:
+                        continue
 
-                clean = re.sub(r'[^\w\s]', '', user_input.lower().strip())
+                    clean = re.sub(r'[^\w\s]', '', user_input.lower().strip())
 
-                if clean == "go private":
-                    private = True
-                    ack = "Private mode on. Staying local."
-                    print(f"\n[ZERO] 🔒 {ack}")
-                    await hud_update({"status": "speaking", "private": True})
-                    await speak_async(ack)
-                    await hud_update({"status": "online", "private": True})
-                    continue
+                    if clean == "go private":
+                        private = True
+                        ack = "Private mode on. Staying local."
+                        print(f"\n[ZERO] 🔒 {ack}")
+                        await hud_update({"status": "speaking", "private": True})
+                        await speak_async(ack)
+                        await hud_update({"status": "online", "private": True})
+                        continue
 
-                if clean in ["go cloud", "cloud mode", "go public", "exit private"]:
-                    private = False
-                    ack = "Back on cloud. Groq is live."
-                    print(f"\n[ZERO] ☁️ {ack}")
-                    await hud_update({"status": "speaking", "private": False})
-                    await speak_async(ack)
-                    await hud_update({"status": "online", "private": False})
-                    continue
+                    if clean in ["go cloud", "cloud mode", "go public", "exit private"]:
+                        private = False
+                        ack = "Back on cloud. Groq is live."
+                        print(f"\n[ZERO] ☁️ {ack}")
+                        await hud_update({"status": "speaking", "private": False})
+                        await speak_async(ack)
+                        await hud_update({"status": "online", "private": False})
+                        continue
 
-                if _is_exit(clean):
-                    farewell = "Later. I'll be here when you need me."
-                    print(f"\nZERO: {farewell}")
-                    await hud_update({"status": "speaking", "zero_response": farewell})
-                    await speak_async(farewell)
-                    break
+                    if _is_exit(clean):
+                        farewell = "Later. I'll be here when you need me."
+                        print(f"\nZERO: {farewell}")
+                        await hud_update({"status": "speaking", "zero_response": farewell})
+                        await speak_async(farewell)
+                        break
 
-                print(f"{'🔒 ' if private else ''}{USER_NAME}: {user_input}")
-                await hud_update({
-                    "status": "thinking",
-                    "user_input": user_input,
-                    "new_user_msg": user_input,
-                })
+                    print(f"{'🔒 ' if private else ''}{USER_NAME}: {user_input}")
+                    await hud_update({
+                        "status": "thinking",
+                        "user_input": user_input,
+                        "new_user_msg": user_input,
+                    })
 
-            else:
-                user_input = input(f"{USER_NAME}: ").strip()
-                if not user_input:
-                    continue
-
-                clean = re.sub(r'[^\w\s]', '', user_input.lower().strip())
-
-                if user_input.lower() == "/private":
-                    private = True
-                    print("[ZERO] 🔒 Private mode on — staying local.\n")
-                    await hud_update({"private": True})
-                    continue
-
-                if user_input.lower() == "/cloud":
-                    private = False
-                    print("[ZERO] ☁️ Back on cloud — Groq is live.\n")
-                    await hud_update({"private": False})
-                    continue
-
-                if _is_exit(clean):
-                    farewell = "Later. I'll be here when you need me."
-                    print(f"\nZERO: {farewell}")
-                    break
-
-                await hud_update({
-                    "status": "thinking",
-                    "user_input": user_input,
-                    "new_user_msg": user_input,
-                })
-
-            # Manual remember command
-            if user_input.lower().startswith("/remember "):
-                parts = user_input[10:].strip().split(":", 1)
-                if len(parts) == 2:
-                    category, fact = parts[0].strip(), parts[1].strip()
-                    await save_fact(category, fact)
-                    msg = f"Got it. Filed under '{category}'."
-                    print(f"\nZERO: {msg}\n")
-                    facts = await get_all_facts()
-                    await hud_update({"facts": facts})
-                    if voice_mode:
-                        await hud_update({"status": "speaking"})
-                        await speak_async(msg)
-                        await hud_update({"status": "online"})
                 else:
-                    print("[ZERO] Format: /remember category: fact\n")
-                continue
+                    user_input = input(f"{USER_NAME}: ").strip()
+                    if not user_input:
+                        continue
 
-            # Classify intent — tell the router whether prior conversation
-            # exists so _is_followup() doesn't fire on a fresh session
-            intent = classify(user_input, has_prior_conversation=_turn_count > 0)
-            print(f"[ZERO] Intent → {intent}")
+                    clean = re.sub(r'[^\w\s]', '', user_input.lower().strip())
 
-            # Think / dispatch
-            print("\nZERO: ", end="", flush=True)
-            await hud_update({"status": "thinking"})
-            response = await handle_intent(intent, user_input, private)
-            _turn_count += 1
-            print(response)
-            print()
+                    if user_input.lower() == "/private":
+                        private = True
+                        print("[ZERO] 🔒 Private mode on — staying local.\n")
+                        await hud_update({"private": True})
+                        continue
 
-            # Auto-save any facts from this exchange
-            await extract_and_save_facts(user_input, response)
+                    if user_input.lower() == "/cloud":
+                        private = False
+                        print("[ZERO] ☁️ Back on cloud — Groq is live.\n")
+                        await hud_update({"private": False})
+                        continue
 
-            facts = await get_all_facts()
-            await hud_update({
-                "status": "speaking",
-                "zero_response": response,
-                "new_zero_msg": response,
-                "facts": facts,
-            })
+                    if _is_exit(clean):
+                        farewell = "Later. I'll be here when you need me."
+                        print(f"\nZERO: {farewell}")
+                        break
 
-            if voice_mode:
-                await speak_async(response)
+                    await hud_update({
+                        "status": "thinking",
+                        "user_input": user_input,
+                        "new_user_msg": user_input,
+                    })
 
-            await hud_update({"status": "listening" if voice_mode else "online"})
+                # Manual remember command
+                if user_input.lower().startswith("/remember "):
+                    parts = user_input[10:].strip().split(":", 1)
+                    if len(parts) == 2:
+                        category, fact = parts[0].strip(), parts[1].strip()
+                        await save_fact(category, fact)
+                        msg = f"Got it. Filed under '{category}'."
+                        print(f"\nZERO: {msg}\n")
+                        facts = await get_all_facts()
+                        await hud_update({"facts": facts})
+                        if voice_mode:
+                            await hud_update({"status": "speaking"})
+                            await speak_async(msg)
+                            await hud_update({"status": "online"})
+                    else:
+                        print("[ZERO] Format: /remember category: fact\n")
+                    continue
 
-        except KeyboardInterrupt:
-            farewell = "Caught that. Later, Aditya."
-            print(f"\n\nZERO: {farewell}")
-            if voice_mode:
-                await speak_async(farewell)
-            break
+                # Classify intent — tell the router whether prior conversation
+                # exists so _is_followup() doesn't fire on a fresh session
+                intent = classify(user_input, has_prior_conversation=_turn_count > 0)
+                print(f"[ZERO] Intent → {intent}")
+
+                # Think / dispatch
+                print("\nZERO: ", end="", flush=True)
+                await hud_update({"status": "thinking"})
+                response = await handle_intent(intent, user_input, private)
+                _turn_count += 1
+                print(response)
+                print()
+
+                # Auto-save any facts from this exchange
+                await extract_and_save_facts(user_input, response)
+
+                facts = await get_all_facts()
+                await hud_update({
+                    "status": "speaking",
+                    "zero_response": response,
+                    "new_zero_msg": response,
+                    "facts": facts,
+                })
+
+                if voice_mode:
+                    await speak_async(response)
+
+                await hud_update({"status": "listening" if voice_mode else "online"})
+
+            except KeyboardInterrupt:
+                farewell = "Caught that. Later, Aditya."
+                print(f"\n\nZERO: {farewell}")
+                if voice_mode:
+                    await speak_async(farewell)
+                break
+    finally:
+        await close_pool()
 
 
 if __name__ == "__main__":

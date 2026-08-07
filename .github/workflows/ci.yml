@@ -49,4 +49,4 @@ jobs:
         run: ruff check .
 
       - name: Pytest
-        run: pytest
+        run: "pytest --cov=core --cov=agents --cov=hud --cov-report=term-missing --cov-report=xml"

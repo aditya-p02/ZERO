@@ -14,12 +14,8 @@ import numpy as np
 import sounddevice as sd
 import soundfile as sf
 import torch
-from dotenv import load_dotenv
-
 from core.clients import groq_client
 from core.config import settings
-
-load_dotenv()
 
 # Audio settings
 SAMPLE_RATE     = 16000

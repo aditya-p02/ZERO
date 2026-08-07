@@ -4,13 +4,9 @@
 
 import re
 
-from dotenv import load_dotenv
-
 from core.clients import groq_client
 from core.config import settings
 from core.logger import log
-
-load_dotenv()
 
 INTENTS = [
     "general",

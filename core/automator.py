@@ -92,9 +92,10 @@ def open_app(app_name: str) -> dict:
     Launch an application by name.
     Returns {"success": bool, "message": str}
 
-    Validates the command BEFORE claiming success — subprocess.Popen with
-    shell=True does not raise just because the inner command fails, so we
-    can't trust "no exception" as proof anything actually opened.
+    Validates the command BEFORE claiming success — subprocess.Popen does
+    not raise just because the inner command fails, so we can't trust
+    "no exception" as proof anything actually opened.
+    Uses shell=False with [command] to prevent shell metacharacter injection.
     """
     command = _resolve_app_command(app_name)
 
@@ -114,7 +115,7 @@ def open_app(app_name: str) -> dict:
 
     try:
         proc = subprocess.Popen(
-            command, shell=True,
+            [command], shell=False,
             stdout=subprocess.DEVNULL, stderr=subprocess.PIPE
         )
         time.sleep(0.6)  # give it a moment — real apps keep running, bad commands exit fast

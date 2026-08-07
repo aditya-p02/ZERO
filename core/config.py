@@ -36,6 +36,7 @@ class Settings:
 
     # Per-role Groq models
     groq_chat_model: str
+    groq_chat_max_tokens: int
     groq_router_model: str
     groq_memory_model: str
     groq_research_model: str
@@ -60,6 +61,7 @@ settings = Settings(
     log_level=os.getenv("LOG_LEVEL", "INFO").upper(),
 
     groq_chat_model=os.getenv("GROQ_CHAT_MODEL", "llama-3.3-70b-versatile"),
+    groq_chat_max_tokens=_int_env("GROQ_CHAT_MAX_TOKENS", 1000),
     groq_router_model=os.getenv("GROQ_ROUTER_MODEL", "llama-3.1-8b-instant"),
     groq_memory_model=os.getenv("GROQ_MEMORY_MODEL", "llama-3.1-8b-instant"),
     groq_research_model=os.getenv("GROQ_RESEARCH_MODEL", "llama-3.3-70b-versatile"),

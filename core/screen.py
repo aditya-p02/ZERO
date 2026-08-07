@@ -16,11 +16,7 @@ import os
 import tempfile
 from datetime import datetime
 
-from dotenv import load_dotenv
-
 from core.config import settings
-
-load_dotenv()
 
 # Optional: override tesseract path via .env
 TESSERACT_PATH = settings.tesseract_path

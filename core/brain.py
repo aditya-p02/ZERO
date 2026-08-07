@@ -5,14 +5,10 @@ import json
 import re
 
 import httpx
-from dotenv import load_dotenv
-
 from core.clients import groq_client
 from core.config import settings
 from core.logger import log
 from core.memory import get_all_facts, get_recent_conversation, save_fact
-
-load_dotenv()
 
 OLLAMA_BASE_URL = settings.ollama_base_url
 OLLAMA_MODEL    = settings.ollama_model
@@ -178,7 +174,7 @@ async def _think_groq(system_prompt: str, messages: list) -> str:
                     *messages
                 ],
                 temperature=0.4,
-                max_tokens=500,
+                max_tokens=settings.groq_chat_max_tokens,
             )
             return completion.choices[0].message.content
         except Exception as e:

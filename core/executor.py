@@ -42,7 +42,10 @@ _BLOCKED_BUILTINS = {
 # Build safe builtins dict
 _SAFE_BUILTINS: dict = {}
 for _name in dir(builtins):
-    if _name not in _BLOCKED_BUILTINS:
+    if _name not in _BLOCKED_BUILTINS and _name not in {
+        "getattr", "type", "dir", "globals", "vars", "locals",
+        "hasattr", "setattr", "delattr",
+    }:
         _SAFE_BUILTINS[_name] = getattr(builtins, _name)
 
 # Inject a controlled __import__ that only allows safe modules
