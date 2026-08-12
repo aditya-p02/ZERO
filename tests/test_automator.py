@@ -24,5 +24,12 @@ def test_key_normalization():
 
 def test_find_window_requires_reasonable_match(monkeypatch):
     windows = [types.SimpleNamespace(title="Completely Different Window")]
-    monkeypatch.setattr(automator.gw, "getAllWindows", lambda: windows)
+    if automator.IS_LINUX:
+        monkeypatch.setattr(
+            automator,
+            "get_linux_window_titles",
+            lambda: [window.title for window in windows],
+        )
+    else:
+        monkeypatch.setattr(automator.gw, "getAllWindows", lambda: windows)
     assert automator._find_window("notepad") is None

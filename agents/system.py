@@ -4,9 +4,14 @@
 # Deliberately excludes: shutdown, restart, anything touching personal files/data
 
 import asyncio
+import platform
 import re
+import subprocess
 
 import psutil
+
+IS_WINDOWS = platform.system() == "Windows"
+IS_LINUX = platform.system() == "Linux"
 
 # ── Volume control (Windows — pycaw) ───────────────────────────────────────────
 
@@ -24,6 +29,8 @@ def _get_volume_interface():
 def _set_volume(level: int) -> str:
     """level: 0-100"""
     level = max(0, min(100, level))
+    if IS_LINUX:
+        return _set_linux_volume(level)
     try:
         volume = _get_volume_interface()
         volume.SetMasterVolumeLevelScalar(level / 100, None)
@@ -33,6 +40,8 @@ def _set_volume(level: int) -> str:
 
 
 def _get_volume() -> str:
+    if IS_LINUX:
+        return _get_linux_volume()
     try:
         volume = _get_volume_interface()
         current = round(volume.GetMasterVolumeLevelScalar() * 100)
@@ -42,6 +51,8 @@ def _get_volume() -> str:
 
 
 def _mute(state: bool) -> str:
+    if IS_LINUX:
+        return _set_linux_mute(state)
     try:
         volume = _get_volume_interface()
         volume.SetMute(1 if state else 0, None)
@@ -52,6 +63,8 @@ def _mute(state: bool) -> str:
 
 def _adjust_volume(delta: int) -> str:
     """delta: positive or negative, e.g. +10 or -10"""
+    if IS_LINUX:
+        return _adjust_linux_volume(delta)
     try:
         volume = _get_volume_interface()
         current = volume.GetMasterVolumeLevelScalar() * 100
@@ -60,6 +73,79 @@ def _adjust_volume(delta: int) -> str:
         return f"Volume {'up' if delta > 0 else 'down'} to {round(new_level)}%."
     except Exception as e:
         return f"Couldn't adjust volume: {e}"
+
+
+def _run_audio_command(args: list[str]) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(args, text=True, capture_output=True, check=False)
+
+
+def _set_linux_volume(level: int) -> str:
+    for cmd in (["pactl", "set-sink-volume", "@DEFAULT_SINK@", f"{level}%"],
+                ["amixer", "sset", "Master", f"{level}%"]):
+        try:
+            proc = _run_audio_command(cmd)
+        except FileNotFoundError:
+            continue
+        if proc.returncode == 0:
+            return f"Volume set to {level}%."
+    return "Couldn't change volume: install pactl/pulseaudio-utils or alsa-utils."
+
+
+def _get_linux_volume() -> str:
+    try:
+        proc = _run_audio_command(["pactl", "get-sink-volume", "@DEFAULT_SINK@"])
+    except FileNotFoundError:
+        proc = None
+    if proc and proc.returncode == 0:
+        match = re.search(r"(\d+)%", proc.stdout)
+        if match:
+            return f"Volume is at {match.group(1)}%."
+
+    try:
+        proc = _run_audio_command(["amixer", "get", "Master"])
+    except FileNotFoundError:
+        proc = None
+    if proc and proc.returncode == 0:
+        match = re.search(r"\[(\d+)%\]", proc.stdout)
+        if match:
+            return f"Volume is at {match.group(1)}%."
+
+    return "Couldn't read volume: install pactl/pulseaudio-utils or alsa-utils."
+
+
+def _set_linux_mute(state: bool) -> str:
+    value = "1" if state else "0"
+    for cmd in (["pactl", "set-sink-mute", "@DEFAULT_SINK@", value],
+                ["amixer", "sset", "Master", "mute" if state else "unmute"]):
+        try:
+            proc = _run_audio_command(cmd)
+        except FileNotFoundError:
+            continue
+        if proc.returncode == 0:
+            return "Muted." if state else "Unmuted."
+    return "Couldn't change mute state: install pactl/pulseaudio-utils or alsa-utils."
+
+
+def _adjust_linux_volume(delta: int) -> str:
+    sign = "+" if delta > 0 else "-"
+    amount = abs(delta)
+    try:
+        proc = _run_audio_command(
+            ["pactl", "set-sink-volume", "@DEFAULT_SINK@", f"{sign}{amount}%"]
+        )
+    except FileNotFoundError:
+        proc = None
+    if proc and proc.returncode == 0:
+        return f"Volume {'up' if delta > 0 else 'down'} by {amount}%."
+
+    try:
+        proc = _run_audio_command(["amixer", "sset", "Master", f"{amount}%{sign}"])
+    except FileNotFoundError:
+        proc = None
+    if proc and proc.returncode == 0:
+        return f"Volume {'up' if delta > 0 else 'down'} by {amount}%."
+
+    return "Couldn't adjust volume: install pactl/pulseaudio-utils or alsa-utils."
 
 
 # ── Brightness control ──────────────────────────────────────────────────────────
@@ -132,6 +218,20 @@ def _get_full_status() -> str:
 # ── Sleep ──────────────────────────────────────────────────────────────────────
 
 def _sleep_system() -> str:
+    if IS_LINUX:
+        try:
+            proc = subprocess.run(
+                ["systemctl", "suspend"], text=True, capture_output=True, check=False
+            )
+            if proc.returncode == 0:
+                return "Going to sleep now."
+            return f"Couldn't put the system to sleep: {proc.stderr.strip() or proc.stdout.strip()}"
+        except Exception as e:
+            return f"Couldn't put the system to sleep: {e}"
+
+    if not IS_WINDOWS:
+        return f"Sleep is not supported on {platform.system()} yet."
+
     try:
         import ctypes
         ctypes.windll.powrprof.SetSuspendState(0, 1, 0)

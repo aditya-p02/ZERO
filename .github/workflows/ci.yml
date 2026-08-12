@@ -6,11 +6,12 @@ on:
 
 jobs:
   lint-and-test:
-    # Windows, not Ubuntu: pygetwindow raises NotImplementedError on import on
-    # Linux (it has no Linux backend at all), and this project's own deps
-    # (comtypes, pycaw) are Windows-only. The runtime target is Windows, so
-    # CI should match that instead of pretending the app is cross-platform.
-    runs-on: windows-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, ubuntu-latest]
+
+    runs-on: ${{ matrix.os }}
     timeout-minutes: 25
 
     env:
@@ -30,6 +31,7 @@ jobs:
           python-version: "3.11"
 
       - name: Exclude Python paths from Windows Defender
+        if: runner.os == 'Windows'
         # Without this, Defender's real-time scan inspects every file pip
         # writes. That's negligible for small packages, but torch,
         # transformers, huggingface_hub, and tokenizers each unpack into

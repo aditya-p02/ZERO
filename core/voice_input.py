@@ -11,9 +11,7 @@ import os
 import tempfile
 
 import numpy as np
-import sounddevice as sd
-import soundfile as sf
-import torch
+
 from core.clients import groq_client
 from core.config import settings
 
@@ -22,18 +20,57 @@ SAMPLE_RATE     = 16000
 VAD_SPEECH_PROB = 0.5   # Silero VAD speech-probability threshold.
                          # Replaces the old fixed amplitude SILENCE_THRESH=0.004,
                          # which discarded quiet/far speech regardless of content.
-SILENCE_SECS    = 1.5
-MAX_CMD_SECS    = 30
 
-# Minimum speech blocks to be worth transcribing
-_SPEECH_START_BLOCKS = 4
-_MIN_SPEECH_BLOCKS   = 10
+# Silero VAD (onnx) hard-requires EXACTLY 512 samples per call at 16kHz
+# (256 at 8kHz). It's not a suggestion — the model raises ValueError on any
+# other size. So the mic block size has to be this, not an arbitrary "nice"
+# duration like 100ms. See silero_vad.utils_vad.OnnxWrapper.__call__.
+VAD_FRAME_SAMPLES = 512
+_BLOCK_DUR        = VAD_FRAME_SAMPLES / SAMPLE_RATE   # ~0.032s per block
+
+SILENCE_SECS       = 1.5   # silence duration that ends recording
+MAX_CMD_SECS       = 30    # hard cap on recording length
+SPEECH_START_SECS  = 0.4   # sustained speech needed before recording starts
+MIN_SPEECH_SECS    = 1.0   # min total speech time in a recording to bother transcribing
 
 # Lazy-loaded local Whisper model
 _local_model = None
 
 # Lazy-loaded Silero VAD model
 _vad_model = None
+
+
+def _get_sounddevice():
+    try:
+        import sounddevice as sd
+    except ImportError as exc:
+        raise RuntimeError(
+            "Voice input needs the optional 'sounddevice' package. "
+            "Install project dependencies for your OS before using voice mode."
+        ) from exc
+    return sd
+
+
+def _get_soundfile():
+    try:
+        import soundfile as sf
+    except ImportError as exc:
+        raise RuntimeError(
+            "Voice transcription needs the optional 'soundfile' package. "
+            "Install project dependencies for your OS before using voice mode."
+        ) from exc
+    return sf
+
+
+def _get_torch():
+    try:
+        import torch
+    except ImportError as exc:
+        raise RuntimeError(
+            "Silero VAD needs the optional 'torch' package. "
+            "Install project dependencies for your OS before using voice mode."
+        ) from exc
+    return torch
 
 
 # ── Local model loader ─────────────────────────────────────────────────────────
@@ -55,7 +92,7 @@ def _get_vad_model():
     if _vad_model is None:
         print("[ZERO] Loading Silero VAD... (one-time)")
         from silero_vad import load_silero_vad
-        _vad_model = load_silero_vad(onnx=True)  # onnx backend — lighter than full torch inference
+        _vad_model = load_silero_vad(onnx=True)  # onnx — lighter than full torch inference
         print("[ZERO] VAD ready.")
     return _vad_model
 
@@ -66,8 +103,12 @@ def _is_speech(block: np.ndarray) -> bool:
     recognition, not raw loudness. This is what makes quiet or far-from-mic
     speech reliable; a fixed amplitude threshold cannot distinguish "quiet
     speech" from "silence" the way a trained VAD model can.
+
+    block MUST be exactly VAD_FRAME_SAMPLES (512) samples at SAMPLE_RATE
+    (16000) — Silero enforces this internally and raises ValueError otherwise.
     """
     model = _get_vad_model()
+    torch = _get_torch()
     with torch.no_grad():
         prob = model(torch.from_numpy(block), SAMPLE_RATE).item()
     return prob > VAD_SPEECH_PROB
@@ -81,17 +122,31 @@ def _record_until_silence() -> tuple[np.ndarray, bool]:
     Returns (audio, speech_detected).
 
     Phase A — wait: discard blocks until speech onset confirmed for
-              _SPEECH_START_BLOCKS consecutive blocks.
+              SPEECH_START_SECS of consecutive speech.
     Phase B — record: capture until SILENCE_SECS of silence or MAX_CMD_SECS.
 
     speech_detected=False means it was a cough/thump — skip transcription.
 
     Speech/silence classification uses Silero VAD (_is_speech), not raw
     amplitude — this is what makes quiet or far-from-mic speech reliable.
+
+    Block size is fixed at VAD_FRAME_SAMPLES because Silero VAD only accepts
+    that exact frame size per call — everything else here (onset/silence/max
+    thresholds) is defined in seconds and converted to block counts so the
+    actual timing behavior doesn't depend on that implementation detail.
     """
-    block_size     = int(SAMPLE_RATE * 0.1)   # 0.1s per block
-    max_blocks     = int(MAX_CMD_SECS / 0.1)
-    silence_blocks = int(SILENCE_SECS / 0.1)
+    block_size          = VAD_FRAME_SAMPLES
+    max_blocks          = int(MAX_CMD_SECS / _BLOCK_DUR)
+    silence_blocks      = max(1, round(SILENCE_SECS / _BLOCK_DUR))
+    speech_start_blocks = max(1, round(SPEECH_START_SECS / _BLOCK_DUR))
+    min_speech_blocks   = max(1, round(MIN_SPEECH_SECS / _BLOCK_DUR))
+
+    # Fresh session: clear Silero's recurrent state (_state/_context) so
+    # audio from a previous listen() call can't bleed into this one's
+    # speech/silence decisions.
+    _get_vad_model().reset_states()
+
+    sd = _get_sounddevice()
 
     with sd.InputStream(samplerate=SAMPLE_RATE, channels=1,
                         dtype="float32", blocksize=block_size) as stream:
@@ -103,7 +158,7 @@ def _record_until_silence() -> tuple[np.ndarray, bool]:
             block = block.flatten()
             if _is_speech(block):
                 onset_count += 1
-                if onset_count >= _SPEECH_START_BLOCKS:
+                if onset_count >= speech_start_blocks:
                     recorded = [block]
                     break
             else:
@@ -111,7 +166,7 @@ def _record_until_silence() -> tuple[np.ndarray, bool]:
 
         # ── Phase B: record until silence ─────────────────────────────────
         silent_count  = 0
-        speech_blocks = _SPEECH_START_BLOCKS
+        speech_blocks = speech_start_blocks
 
         for _ in range(max_blocks):
             block, _ = stream.read(block_size)
@@ -126,12 +181,13 @@ def _record_until_silence() -> tuple[np.ndarray, bool]:
                     break
 
     audio = np.concatenate(recorded)
-    speech_detected = speech_blocks >= _MIN_SPEECH_BLOCKS
+    speech_detected = speech_blocks >= min_speech_blocks
     return audio, speech_detected
 
 
 def _audio_to_wav(audio: np.ndarray) -> str:
     """Write numpy audio to a temp WAV file, return the path."""
+    sf = _get_soundfile()
     with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as tmp:
         sf.write(tmp.name, audio, SAMPLE_RATE)
         return tmp.name

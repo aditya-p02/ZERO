@@ -9,10 +9,7 @@ from agents.router import classify
 from core.brain import extract_and_save_facts, think
 from core.config import settings
 from core.memory import close_pool, get_all_facts, init_memory, save_fact, save_message
-from core.voice_input import listen
 from core.voice_output import speak_async
-from hud.server import broadcast as _hud_broadcast
-from hud.server import start_server as _hud_start_server
 
 USER_NAME = settings.user_name
 
@@ -58,14 +55,18 @@ def _is_exit(clean: str) -> bool:
 
 async def hud_update(update: dict):
     try:
-        await _hud_broadcast(update)
+        from hud.server import broadcast
+
+        await broadcast(update)
     except Exception:
         pass
 
 
 async def start_hud():
     try:
-        asyncio.create_task(_hud_start_server())
+        from hud.server import start_server
+
+        asyncio.create_task(start_server())
         await asyncio.sleep(2.0)
         webbrowser.get().open("http://localhost:8766/index.html", new=0, autoraise=True)
         print("[ZERO] HUD launched in browser.")
@@ -147,6 +148,7 @@ async def main():
 
     mode = input("Choose (1 or 2): ").strip()
     voice_mode = mode == "2"
+    listen = None
 
     print()
     print("[ZERO] Initializing memory...")
@@ -156,6 +158,14 @@ async def main():
 
     if voice_mode:
         print("[ZERO] Connecting to Groq voice API...")
+        try:
+            from core.voice_input import listen as voice_listen
+        except Exception as e:
+            print(f"[ZERO] Voice mode unavailable: {e}")
+            print("[ZERO] Falling back to text mode.")
+            voice_mode = False
+        else:
+            listen = voice_listen
 
     greeting = f"Hey {USER_NAME}, what's up?"
     print(f"\nZERO: {greeting}\n")
@@ -173,6 +183,10 @@ async def main():
         while True:
             try:
                 if voice_mode:
+                    if listen is None:
+                        print("[ZERO] Voice mode unavailable. Falling back to text mode.")
+                        voice_mode = False
+                        continue
                     await hud_update({"status": "listening", "user_input": ""})
                     user_input = listen(private=private)
 

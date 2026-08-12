@@ -8,18 +8,38 @@
 #   - Everything async-wrapped so it never blocks ZERO's main loop
 
 import asyncio
-import os
-import shutil
-import subprocess
 import time
 from difflib import SequenceMatcher
 
-import pyautogui
-import pygetwindow as gw
+from core.platform_tools import (
+    IS_LINUX,
+    IS_WINDOWS,
+    UnsupportedPlatformError,
+    close_linux_window,
+    command_exists,
+    focus_linux_window,
+    get_linux_window_titles,
+    open_uri,
+    run_detached,
+)
 
-# Keep PyAutoGUI's corner-abort enabled. Automation controls the real machine.
-pyautogui.FAILSAFE = True
-pyautogui.PAUSE = 0.05
+try:
+    import pyautogui
+except Exception as e:  # pragma: no cover - depends on desktop session
+    pyautogui = None
+    _PYAUTOGUI_IMPORT_ERROR = e
+else:
+    _PYAUTOGUI_IMPORT_ERROR = None
+
+if IS_WINDOWS:
+    import pygetwindow as gw
+else:
+    gw = None
+
+if pyautogui is not None:
+    # Keep PyAutoGUI's corner-abort enabled. Automation controls the real machine.
+    pyautogui.FAILSAFE = True
+    pyautogui.PAUSE = 0.05
 
 
 # ── Common app name → executable/command mapping ──────────────────────────────
@@ -27,7 +47,10 @@ pyautogui.PAUSE = 0.05
 _APP_ALIASES = {
     "chrome": "chrome",
     "google chrome": "chrome",
+    "firefox": "firefox",
+    "browser": "firefox" if IS_LINUX else "chrome",
     "notepad": "notepad",
+    "text editor": "gedit" if IS_LINUX else "notepad",
     "calculator": "calc",
     "spotify": "spotify",
     "vscode": "code",
@@ -82,9 +105,15 @@ def _command_exists(command: str) -> bool:
     Check whether a command actually resolves to something runnable
     before we attempt to launch it and claim success.
     """
-    if command in _APP_ALIASES.values():
+    if IS_WINDOWS and command in _APP_ALIASES.values():
         return True
-    return shutil.which(command) is not None
+    return command_exists(command)
+
+
+def _require_pyautogui():
+    if pyautogui is None:
+        raise RuntimeError(f"PyAutoGUI is unavailable: {_PYAUTOGUI_IMPORT_ERROR}")
+    return pyautogui
 
 
 def open_app(app_name: str) -> dict:
@@ -101,7 +130,7 @@ def open_app(app_name: str) -> dict:
 
     if command.startswith("ms-settings:"):
         try:
-            os.startfile(command)
+            open_uri(command)
             time.sleep(0.8)
             return {"success": True, "message": f"Opened {app_name}."}
         except Exception as e:
@@ -114,10 +143,7 @@ def open_app(app_name: str) -> dict:
         }
 
     try:
-        proc = subprocess.Popen(
-            [command], shell=False,
-            stdout=subprocess.DEVNULL, stderr=subprocess.PIPE
-        )
+        proc = run_detached([command])
         time.sleep(0.6)  # give it a moment — real apps keep running, bad commands exit fast
 
         if proc.poll() is not None and proc.returncode != 0:
@@ -141,7 +167,10 @@ def close_app(app_name: str) -> dict:
     if window is None:
         return {"success": False, "message": f"Couldn't find a window matching '{app_name}'."}
     try:
-        window.close()
+        if IS_LINUX and isinstance(window, str):
+            close_linux_window(window)
+        else:
+            window.close()
         return {"success": True, "message": f"Closed {app_name}."}
     except Exception as e:
         return {"success": False, "message": f"Couldn't close {app_name}: {e}"}
@@ -153,7 +182,16 @@ def _find_window(app_name: str):
     Uses fuzzy matching since window titles rarely match the app name exactly
     (e.g. "Notepad" app might show as "Untitled - Notepad").
     """
-    all_windows = [w for w in gw.getAllWindows() if w.title.strip()]
+    if IS_LINUX:
+        try:
+            all_windows = get_linux_window_titles()
+        except UnsupportedPlatformError:
+            return None
+    elif gw is not None:
+        all_windows = [w for w in gw.getAllWindows() if w.title.strip()]
+    else:
+        return None
+
     if not all_windows:
         return None
 
@@ -162,7 +200,8 @@ def _find_window(app_name: str):
     best_score = 0.0
 
     for w in all_windows:
-        title_lower = w.title.lower()
+        title = w if isinstance(w, str) else w.title
+        title_lower = title.lower()
         if lower_target in title_lower:
             return w  # direct substring match — good enough, return immediately
         score = SequenceMatcher(None, lower_target, title_lower).ratio()
@@ -180,9 +219,13 @@ def focus_app(app_name: str) -> dict:
     if window is None:
         return {"success": False, "message": f"Couldn't find a window matching '{app_name}'."}
     try:
-        if window.isMinimized:
+        if IS_LINUX and isinstance(window, str):
+            focus_linux_window(window)
+        elif window.isMinimized:
             window.restore()
-        window.activate()
+            window.activate()
+        else:
+            window.activate()
         return {"success": True, "message": f"Switched to {app_name}."}
     except Exception as e:
         return {"success": False, "message": f"Couldn't focus {app_name}: {e}"}
@@ -192,6 +235,14 @@ def minimize_app(app_name: str) -> dict:
     window = _find_window(app_name)
     if window is None:
         return {"success": False, "message": f"Couldn't find a window matching '{app_name}'."}
+    if IS_LINUX and isinstance(window, str):
+        return {
+            "success": False,
+            "message": (
+                "Minimize is not available on Linux yet. "
+                "Install/use wmctrl support for this action."
+            ),
+        }
     try:
         window.minimize()
         return {"success": True, "message": f"Minimized {app_name}."}
@@ -203,6 +254,14 @@ def maximize_app(app_name: str) -> dict:
     window = _find_window(app_name)
     if window is None:
         return {"success": False, "message": f"Couldn't find a window matching '{app_name}'."}
+    if IS_LINUX and isinstance(window, str):
+        return {
+            "success": False,
+            "message": (
+                "Maximize is not available on Linux yet. "
+                "Install/use wmctrl support for this action."
+            ),
+        }
     try:
         window.maximize()
         return {"success": True, "message": f"Maximized {app_name}."}
@@ -212,6 +271,13 @@ def maximize_app(app_name: str) -> dict:
 
 def list_open_windows() -> list:
     """Return titles of all currently open windows with visible titles."""
+    if IS_LINUX:
+        try:
+            return get_linux_window_titles()
+        except UnsupportedPlatformError:
+            return []
+    if gw is None:
+        return []
     return [w.title for w in gw.getAllWindows() if w.title.strip()]
 
 
@@ -220,7 +286,7 @@ def list_open_windows() -> list:
 def type_text(text: str, interval: float = 0.02) -> dict:
     """Type text into whatever currently has focus."""
     try:
-        pyautogui.write(text, interval=interval)
+        _require_pyautogui().write(text, interval=interval)
         return {"success": True, "message": "Typed."}
     except Exception as e:
         return {"success": False, "message": f"Couldn't type: {e}"}
@@ -229,7 +295,7 @@ def type_text(text: str, interval: float = 0.02) -> dict:
 def press_key(key: str) -> dict:
     """Press a single key — 'enter', 'esc', 'tab', 'backspace', etc."""
     try:
-        pyautogui.press(key)
+        _require_pyautogui().press(key)
         return {"success": True, "message": f"Pressed {key}."}
     except Exception as e:
         return {"success": False, "message": f"Couldn't press {key}: {e}"}
@@ -238,7 +304,7 @@ def press_key(key: str) -> dict:
 def hotkey(*keys: str) -> dict:
     """Press a key combination — hotkey('ctrl', 'c') for copy, etc."""
     try:
-        pyautogui.hotkey(*keys)
+        _require_pyautogui().hotkey(*keys)
         return {"success": True, "message": f"Pressed {'+'.join(keys)}."}
     except Exception as e:
         return {"success": False, "message": f"Couldn't press hotkey: {e}"}
@@ -249,7 +315,7 @@ def hotkey(*keys: str) -> dict:
 def click_at(x: int, y: int, button: str = "left") -> dict:
     """Click at exact screen coordinates."""
     try:
-        pyautogui.click(x=x, y=y, button=button)
+        _require_pyautogui().click(x=x, y=y, button=button)
         return {"success": True, "message": f"Clicked at ({x}, {y})."}
     except Exception as e:
         return {"success": False, "message": f"Couldn't click: {e}"}
@@ -257,7 +323,7 @@ def click_at(x: int, y: int, button: str = "left") -> dict:
 
 def double_click_at(x: int, y: int) -> dict:
     try:
-        pyautogui.doubleClick(x=x, y=y)
+        _require_pyautogui().doubleClick(x=x, y=y)
         return {"success": True, "message": f"Double-clicked at ({x}, {y})."}
     except Exception as e:
         return {"success": False, "message": f"Couldn't double-click: {e}"}
@@ -265,7 +331,7 @@ def double_click_at(x: int, y: int) -> dict:
 
 def move_to(x: int, y: int, duration: float = 0.2) -> dict:
     try:
-        pyautogui.moveTo(x, y, duration=duration)
+        _require_pyautogui().moveTo(x, y, duration=duration)
         return {"success": True, "message": f"Moved to ({x}, {y})."}
     except Exception as e:
         return {"success": False, "message": f"Couldn't move mouse: {e}"}
@@ -274,7 +340,7 @@ def move_to(x: int, y: int, duration: float = 0.2) -> dict:
 def scroll(amount: int) -> dict:
     """Positive = scroll up, negative = scroll down."""
     try:
-        pyautogui.scroll(amount)
+        _require_pyautogui().scroll(amount)
         return {"success": True, "message": "Scrolled."}
     except Exception as e:
         return {"success": False, "message": f"Couldn't scroll: {e}"}

@@ -4,6 +4,7 @@
 import asyncio
 
 import asyncpg
+
 from core.config import settings
 from core.logger import log
 

@@ -28,16 +28,35 @@ python -m venv .venv
 .\.venv\Scripts\Activate.ps1
 ```
 
+Linux:
+
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+```
+
 2. Install dependencies.
 
 ```powershell
 python -m pip install -r requirements.txt
 ```
 
+Linux may also need system packages for desktop/audio/OCR features. On Ubuntu/Debian:
+
+```bash
+sudo apt install python3-tk scrot wmctrl xdotool tesseract-ocr portaudio19-dev libasound2-dev
+```
+
 3. Create your local environment file.
 
 ```powershell
 Copy-Item .env.example .env
+```
+
+Linux:
+
+```bash
+cp .env.example .env
 ```
 
 4. Fill in `.env` with your keys and local paths.
@@ -61,6 +80,9 @@ python main.py
 - Ollama is required only for private mode.
 - Tesseract OCR is required only for screen reading.
 - ElevenLabs is optional because `edge-tts` is used as fallback.
+- Desktop automation works on both Windows and Linux, but window focus/list/close on Linux needs `wmctrl` or `xdotool`.
+- Volume control uses `pycaw` on Windows and `pactl`/`amixer` on Linux.
+- Voice dependencies are imported lazily, so text mode can run even when microphone/audio packages are missing.
 
 ## Windows OCR Setup
 
